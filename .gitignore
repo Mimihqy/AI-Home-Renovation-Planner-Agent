@@ -2,6 +2,12 @@
 venv/
 __pycache__/
 *.pyc
+AI_home/
+
+# Environment variables (IMPORTANT: Never commit API keys)
+.env
+.env.local
+.env.*.local
 
 # Runtime artifacts
 .adk/
