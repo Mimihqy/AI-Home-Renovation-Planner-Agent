@@ -147,10 +147,14 @@ export default function DreamPage() {
             <h1 className="font-display text-4xl font-bold tracking-normal text-[#2D2D2D] sm:text-6xl">
               设计你的{" "}
               <span
-                className={`${dancingScript.className} text-[#8B6F47] text-5xl sm:text-7xl font-semibold italic`}
+                className={`${dancingScript.className} text-5xl sm:text-7xl font-semibold italic bg-clip-text text-transparent`}
                 style={{
-                  textShadow: '2px 2px 4px rgba(139, 111, 71, 0.15)',
-                  letterSpacing: '0.02em'
+                  backgroundImage: 'linear-gradient(135deg, #E8B86D 0%, #8B6F47 25%, #7A9E7E 50%, #5B8A72 75%, #E8B86D 100%)',
+                  textShadow: 'none',
+                  letterSpacing: '0.02em',
+                  WebkitBackgroundClip: 'text',
+                  backgroundSize: '200% 200%',
+                  animation: 'gradientFlow 3s ease infinite'
                 }}
               >
                 理想空间
