@@ -4,15 +4,14 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { sendChatMessageStream, sendChatWithImageStream } from "../utils/api";
-import AgentStatus from "./AgentStatus";
 import ChatMessageActions from "./ChatMessageActions";
 import QuickPrompts from "./QuickPrompts";
 import ChatActions from "./ChatActions";
 import QuickScenes from "./QuickScenes";
-import { ChatMessage, AgentStatus as AgentStatusType, AGENT_DISPLAY_NAMES, AGENT_ICONS } from "../types/chat";
+import { ChatMessage, AgentStatus as AgentStatusType, AGENT_DISPLAY_NAMES, AGENT_ICONS, AgentEvent } from "../types/chat";
 import LoadingDots from "./LoadingDots";
 import { useToast } from "./Toast";
-import Skeleton, { SkeletonMessage } from "./Skeleton";
+import AgentTimeline from "./AgentTimeline";
 
 interface ChatInterfaceProps {
   onError?: (error: string) => void;
@@ -52,6 +51,17 @@ export default function ChatInterface({ onError }: ChatInterfaceProps) {
         agent.agentName === agentName
           ? { ...agent, status, message }
           : agent
+      )
+    );
+  };
+
+  // 添加 Agent 事件到当前消息的时间线
+  const addAgentEventToMessage = (messageId: string, event: AgentEvent) => {
+    setMessages(prev =>
+      prev.map(msg =>
+        msg.id === messageId
+          ? { ...msg, agentTimeline: [...(msg.agentTimeline || []), event] }
+          : msg
       )
     );
   };
@@ -161,6 +171,23 @@ export default function ChatInterface({ onError }: ChatInterfaceProps) {
       setIsSending(false);
       showToast("回复已生成", "success");
 
+      // 更新 Agent 时间线中的最后一个事件为完成状态
+      setMessages(prev => prev.map(msg => {
+        if (msg.agentTimeline && msg.agentTimeline.length > 0) {
+          const lastEvent = msg.agentTimeline[msg.agentTimeline.length - 1];
+          if (lastEvent.status === "processing") {
+            const updatedTimeline = [...msg.agentTimeline];
+            updatedTimeline[updatedTimeline.length - 1] = {
+              ...lastEvent,
+              status: "completed" as const,
+              message: undefined
+            };
+            return { ...msg, agentTimeline: updatedTimeline };
+          }
+        }
+        return msg;
+      }));
+
       // 更新 Agent 状态为完成
       if (selectedImage) {
         updateAgentStatus("VisualAssessor", "completed");
@@ -199,15 +226,37 @@ export default function ChatInterface({ onError }: ChatInterfaceProps) {
 
     try {
       if (selectedImage) {
-        // 模拟 Agent 协作流程
+        // 模拟 Agent 协作流程 - 添加到时间线
         setTimeout(() => {
+          addAgentEventToMessage(tempMessageId, {
+            agentName: "VisualAssessor",
+            status: "completed",
+            timestamp: new Date()
+          });
           updateAgentStatus("VisualAssessor", "completed");
           updateAgentStatus("DesignPlanner", "processing", "正在生成设计方案...");
+          addAgentEventToMessage(tempMessageId, {
+            agentName: "DesignPlanner",
+            status: "processing",
+            message: "正在生成设计方案...",
+            timestamp: new Date()
+          });
         }, 800);
 
         setTimeout(() => {
+          addAgentEventToMessage(tempMessageId, {
+            agentName: "DesignPlanner",
+            status: "completed",
+            timestamp: new Date()
+          });
           updateAgentStatus("DesignPlanner", "completed");
           updateAgentStatus("ProjectCoordinator", "processing", "正在生成效果图...");
+          addAgentEventToMessage(tempMessageId, {
+            agentName: "ProjectCoordinator",
+            status: "processing",
+            message: "正在生成效果图...",
+            timestamp: new Date()
+          });
         }, 1500);
 
         // 调用流式 API（带图片）
@@ -221,6 +270,14 @@ export default function ChatInterface({ onError }: ChatInterfaceProps) {
           handleError
         );
       } else {
+        // 纯文本消息，添加咨询助手事件
+        addAgentEventToMessage(tempMessageId, {
+          agentName: "InfoAgent",
+          status: "processing",
+          message: "正在分析您的问题...",
+          timestamp: new Date()
+        });
+
         // 调用流式 API（纯文本）
         await sendChatMessageStream(
           input.trim(),
@@ -256,13 +313,8 @@ export default function ChatInterface({ onError }: ChatInterfaceProps) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Agent 状态栏 */}
-      <div className="flex-shrink-0 px-4 pt-4">
-        <AgentStatus agents={agentStatuses} />
-      </div>
-
       {/* 对话操作栏 */}
-      <div className="flex-shrink-0 px-4">
+      <div className="flex-shrink-0 px-4 pt-4">
         <ChatActions
           onClear={handleClearMessages}
           messageCount={messages.length}
@@ -360,17 +412,24 @@ export default function ChatInterface({ onError }: ChatInterfaceProps) {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+              className={`flex flex-col ${message.role === "user" ? "items-end" : "items-start"} mb-2`}
             >
-              <div className={`max-w-[80%] group ${
+              {/* 消息气泡 */}
+              <div className={`group ${
                 message.role === "user"
-                  ? "bg-gradient-to-r from-[#D4A652] to-[#8B6F47] text-white rounded-2xl rounded-br-sm shadow-lg shadow-[#8B6F47]/20"
-                    : "bg-white/70 backdrop-blur-md text-[#2D2D2D] rounded-2xl rounded-bl-sm border border-[#8B6F47]/20 relative overflow-hidden"
-              } p-4`}>
+                  ? "max-w-[60%] sm:max-w-[50%] bg-gradient-to-r from-[#D4A652] to-[#8B6F47] text-white rounded-2xl rounded-br-sm shadow-lg shadow-[#8B6F47]/20"
+                    : "max-w-[85%] bg-white/70 backdrop-blur-md text-[#2D2D2D] rounded-2xl rounded-bl-sm border border-[#8B6F47]/20 relative overflow-hidden"
+              } p-3 sm:p-4`}>
                 {/* AI 消息左侧装饰条 */}
                 {message.role === "assistant" && (
                   <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#D4A652] via-[#8B6F47] to-[#7A9E7E]" />
                 )}
+
+                {/* Agent 时间线 - 显示 agent 行为轨迹 */}
+                {message.role === "assistant" && message.agentTimeline && message.agentTimeline.length > 0 && (
+                  <AgentTimeline events={message.agentTimeline} />
+                )}
+
                 {/* Agent 标签 */}
                 {message.agentName && message.role === "assistant" && (
                   <div className="flex items-center space-x-2 mb-2 pb-2 border-b border-[#8B6F47]/20">
@@ -384,7 +443,7 @@ export default function ChatInterface({ onError }: ChatInterfaceProps) {
                 )}
 
                 {/* 消息内容 */}
-                <div className="whitespace-pre-wrap">
+                <div className="whitespace-pre-wrap text-sm sm:text-base">
                   {message.content || (
                     <span className="text-[#8A8A8A] italic">正在思考...</span>
                   )}
@@ -409,16 +468,16 @@ export default function ChatInterface({ onError }: ChatInterfaceProps) {
                     onRegenerate={() => handleRegenerate(message)}
                   />
                 )}
+              </div>
 
-                {/* 时间戳 */}
-                <div className={`text-xs mt-2 ${
-                  message.role === "user" ? "text-amber-100" : "text-[#8A8A8A]"
-                }`}>
-                  {message.timestamp.toLocaleTimeString("zh-CN", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </div>
+              {/* 时间戳 - 在气泡外部右下角 */}
+              <div className={`text-[10px] sm:text-xs mt-1 ${
+                message.role === "user" ? "text-[#8A8A8A] mr-2" : "text-[#8A8A8A] ml-2"
+              }`}>
+                {message.timestamp.toLocaleTimeString("zh-CN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
               </div>
             </motion.div>
           ))}

@@ -2,6 +2,16 @@
  * 聊天消息类型定义
  */
 
+/**
+ * Agent 事件定义 - 用于追踪 agent 行为轨迹
+ */
+export interface AgentEvent {
+  agentName: string;
+  status: 'processing' | 'completed' | 'error';
+  message?: string;
+  timestamp: Date;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -9,6 +19,7 @@ export interface ChatMessage {
   imageUrl?: string;       // 如果有生成的效果图
   agentName?: string;     // 来自哪个 Agent (如: VisualAssessor, DesignPlanner, ProjectCoordinator)
   timestamp: Date;
+  agentTimeline?: AgentEvent[];  // Agent 行为轨迹
 }
 
 /**

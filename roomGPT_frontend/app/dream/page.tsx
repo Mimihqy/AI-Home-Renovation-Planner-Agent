@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { Dancing_Script } from "next/font/google";
 import { CompareSlider } from "../../components/CompareSlider";
@@ -33,7 +33,7 @@ const API_URL = `${API_BASE_URL}/api/chat-with-image`;
 
 export default function DreamPage() {
   const [mode, setMode] = useState<"generate" | "chat">("generate");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true); // 默认展开
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [originalPhoto, setOriginalPhoto] = useState<string | null>(null);
   const [restoredImage, setRestoredImage] = useState<string | null>(null);
@@ -45,6 +45,14 @@ export default function DreamPage() {
   const [theme, setTheme] = useState<themeType>("Modern");
   const [room, setRoom] = useState<roomType>("Living Room");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 从 localStorage 恢复侧栏状态
+  useEffect(() => {
+    const saved = localStorage.getItem("sidebarOpen");
+    if (saved !== null) {
+      setSidebarOpen(saved === "true");
+    }
+  }, []);
 
   // 从历史记录加载对话
   const handleLoadHistory = (history: ChatMessage[]) => {
@@ -145,11 +153,11 @@ export default function DreamPage() {
           transition={{ duration: 0.6 }}
           className="relative z-10 w-full max-w-7xl"
         >
-          <div className="flex items-center justify-between w-full mb-5">
-            <h1 className="font-display text-4xl font-bold tracking-normal text-[#2D2D2D] sm:text-6xl">
+          <div className="flex items-center justify-between w-full mb-3">
+            <h1 className="font-display text-2xl font-bold tracking-normal text-[#2D2D2D] sm:text-3xl">
               设计你的{" "}
               <span
-                className={`${dancingScript.className} text-5xl sm:text-7xl font-semibold italic bg-clip-text text-transparent`}
+                className={`${dancingScript.className} text-2xl sm:text-3xl font-semibold italic bg-clip-text text-transparent`}
                 style={{
                   backgroundImage: 'linear-gradient(135deg, #E8B86D 0%, #8B6F47 25%, #7A9E7E 50%, #5B8A72 75%, #E8B86D 100%)',
                   textShadow: 'none',
@@ -174,11 +182,11 @@ export default function DreamPage() {
           </div>
 
           {/* 模式切换按钮 */}
-          <div className="flex justify-center space-x-2 mb-8">
-            <div className="bg-white/60 backdrop-blur-md p-1.5 rounded-2xl border border-[#8B6F47]/15 shadow-sm">
+          <div className="flex justify-center space-x-2 mb-4">
+            <div className="bg-white/60 backdrop-blur-md p-1 rounded-xl border border-[#8B6F47]/15 shadow-sm">
               <button
                 onClick={() => setMode("generate")}
-                className={`px-8 py-3 rounded-xl font-medium transition-all duration-300 ${
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${
                   mode === "generate"
                     ? "bg-[#8B6F47] text-white shadow-md"
                     : "text-[#5A5A5A] hover:text-[#2D2D2D] hover:bg-white/50"
@@ -188,7 +196,7 @@ export default function DreamPage() {
               </button>
               <button
                 onClick={() => setMode("chat")}
-                className={`px-8 py-3 rounded-xl font-medium transition-all duration-300 ${
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${
                   mode === "chat"
                     ? "bg-[#7A9E7E] text-white shadow-md"
                     : "text-[#5A5A5A] hover:text-[#2D2D2D] hover:bg-white/50"
@@ -199,25 +207,7 @@ export default function DreamPage() {
             </div>
           </div>
 
-          {/* AI 模式工具栏（历史记录 + Agent 状态折叠） */}
-          {mode === "chat" && (
-            <div className="flex justify-center space-x-2 mb-6">
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 ${
-                  sidebarOpen
-                    ? "bg-white/80 text-[#2D2D2D]"
-                    : "bg-white/60 text-[#5A5A5A] hover:bg-white/80"
-                }`}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m0 0l3 3m-3 3V8a3 3 0 00-6 0V6a3 3 0 00-3 3v12a3 3 0 00-3 3z" />
-                </svg>
-                <span>历史记录</span>
-              </button>
-              {/* 移除 AI 状态按钮，因为 Agent 状态现在在 ChatInterface 内部 */}
-            </div>
-          )}
+          {/* AI 模式工具栏已移除，历史记录面板常驻左侧 */}
 
           <ResizablePanel>
             <AnimatePresence mode="wait">
@@ -230,19 +220,47 @@ export default function DreamPage() {
                 className="w-full"
               >
                 {mode === "chat" ? (
-                  // 聊天模式
-                  <motion.div className="flex gap-2 w-full">
-                    {/* 历史记录侧栏 */}
-                    {sidebarOpen && (
-                      <ChatHistoryPanel
-                        isOpen={sidebarOpen}
-                        onClose={() => setSidebarOpen(false)}
-                        onLoadHistory={handleLoadHistory}
-                      />
-                    )}
+                  // 聊天模式 - 左侧常驻历史记录面板
+                  <motion.div className="flex w-full h-[calc(100vh-220px)]">
+                    {/* 历史记录侧栏 - 常驻左侧 */}
+                    <motion.div
+                      initial={false}
+                      animate={{ width: sidebarOpen ? 280 : 0 }}
+                      transition={{ duration: 0.3, ease: "easeInOut" }}
+                      className="overflow-hidden flex-shrink-0"
+                    >
+                      <div className="w-[280px] h-full">
+                        <ChatHistoryPanel
+                          isOpen={sidebarOpen}
+                          onClose={() => setSidebarOpen(false)}
+                          onLoadHistory={handleLoadHistory}
+                          onNewChat={handleNewChat}
+                        />
+                      </div>
+                    </motion.div>
+
+                    {/* 收起/展开按钮 */}
+                    <button
+                      onClick={() => {
+                        const newState = !sidebarOpen;
+                        setSidebarOpen(newState);
+                        localStorage.setItem("sidebarOpen", String(newState));
+                      }}
+                      className="flex-shrink-0 w-6 h-full flex items-center justify-center bg-white/40 hover:bg-white/60 transition-colors group"
+                      title={sidebarOpen ? "收起侧栏" : "展开侧栏"}
+                    >
+                      <svg
+                        className={`w-4 h-4 text-[#8B6F47]/60 group-hover:text-[#8B6F47] transition-transform duration-300 ${sidebarOpen ? "rotate-180" : ""}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
 
                     {/* 主聊天区域 */}
-                    <div className="flex-1 flex flex-col min-w-0 w-full">
+                    <div className="flex-1 flex flex-col min-w-0">
                       {/* 聊天界面 */}
                       <div className="flex-1 overflow-hidden rounded-2xl bg-white/60 backdrop-blur-md border border-[#8B6F47]/15">
                         <ChatInterface
@@ -250,7 +268,7 @@ export default function DreamPage() {
                         />
                         {error && (
                           <div
-                            className="bg-red-500/20 border border-red-400/50 text-red-700 px-4 py-3 rounded-xl mt-4 backdrop-blur-sm"
+                            className="bg-red-500/20 border border-red-400/50 text-red-700 px-4 py-3 rounded-xl m-4 backdrop-blur-sm"
                             role="alert"
                           >
                             <span className="block sm:inline">{error}</span>
