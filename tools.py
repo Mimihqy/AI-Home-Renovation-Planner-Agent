@@ -5,6 +5,7 @@ from google.genai import types
 from google.adk.tools import ToolContext
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+from db import save_asset
 
 load_dotenv()
 
@@ -97,6 +98,16 @@ def get_latest_reference_image_filename(tool_context: ToolContext) -> str:
     return tool_context.state.get("latest_reference_image")
 
 
+def get_latest_current_room_image_filename(tool_context: ToolContext) -> str | None:
+    """Get the filename of the latest current room image."""
+    return tool_context.state.get("latest_current_room_image")
+
+
+def get_latest_rendering_filename(tool_context: ToolContext) -> str | None:
+    """Get the filename of the latest generated or edited rendering."""
+    return tool_context.state.get("last_generated_rendering")
+
+
 # ============================================================================
 # Pydantic Input Models
 # ============================================================================
@@ -142,17 +153,20 @@ async def generate_renovation_rendering(tool_context: ToolContext, inputs: Gener
         # Handle reference images (current room photo or inspiration)
         reference_images = []
         
-        if inputs.current_room_photo:
-            current_photo_part = await load_reference_image(tool_context, inputs.current_room_photo)
+        current_room_filename = inputs.current_room_photo or get_latest_current_room_image_filename(tool_context)
+        inspiration_filename = inputs.inspiration_image
+
+        if current_room_filename:
+            current_photo_part = await load_reference_image(tool_context, current_room_filename)
             if current_photo_part:
                 reference_images.append(current_photo_part)
-                logger.info(f"Using current room photo: {inputs.current_room_photo}")
+                logger.info(f"Using current room photo: {current_room_filename}")
         
-        if inputs.inspiration_image:
-            if inputs.inspiration_image == "latest":
-                insp_filename = get_latest_reference_image_filename(tool_context)
+        if inspiration_filename or tool_context.state.get("latest_inspiration_image"):
+            if inspiration_filename == "latest" or not inspiration_filename:
+                insp_filename = tool_context.state.get("latest_inspiration_image") or get_latest_reference_image_filename(tool_context)
             else:
-                insp_filename = inputs.inspiration_image
+                insp_filename = inspiration_filename
             
             if insp_filename:
                 inspiration_part = await load_reference_image(tool_context, insp_filename)
@@ -276,6 +290,17 @@ async def generate_renovation_rendering(tool_context: ToolContext, inputs: Gener
                     # Store in session state
                     tool_context.state["last_generated_rendering"] = artifact_filename
                     tool_context.state["current_asset_name"] = inputs.asset_name
+                    tool_context.state["latest_result_image"] = artifact_filename
+                    tool_context.state["latest_result_image_type"] = "generated_render"
+
+                    save_asset(
+                        session_id=tool_context.session.id,
+                        user_id=tool_context.user_id,
+                        filename=artifact_filename,
+                        asset_type="generated_render",
+                        version=version,
+                        metadata={"asset_name": inputs.asset_name},
+                    )
                     
                     logger.info(f"Saved rendering as artifact '{artifact_filename}' (version {version})")
                     
@@ -322,7 +347,7 @@ async def edit_renovation_rendering(tool_context: ToolContext, inputs: EditRenov
         # Get artifact_filename from session state if not provided
         artifact_filename = inputs.artifact_filename
         if not artifact_filename:
-            artifact_filename = tool_context.state.get("last_generated_rendering")
+            artifact_filename = get_latest_rendering_filename(tool_context)
             if not artifact_filename:
                 return "❌ No artifact_filename provided and no previous rendering found in session. Please generate a rendering first using generate_renovation_rendering."
             logger.info(f"Using last generated rendering from session: {artifact_filename}")
@@ -461,6 +486,17 @@ async def edit_renovation_rendering(tool_context: ToolContext, inputs: EditRenov
                     # Store in session state
                     tool_context.state["last_generated_rendering"] = edited_artifact_filename
                     tool_context.state["current_asset_name"] = asset_name
+                    tool_context.state["latest_result_image"] = edited_artifact_filename
+                    tool_context.state["latest_result_image_type"] = "edited_render"
+
+                    save_asset(
+                        session_id=tool_context.session.id,
+                        user_id=tool_context.user_id,
+                        filename=edited_artifact_filename,
+                        asset_type="edited_render",
+                        version=version,
+                        metadata={"asset_name": asset_name, "source_artifact": artifact_filename},
+                    )
                     
                     logger.info(f"Saved edited rendering as artifact '{edited_artifact_filename}' (version {version})")
                     

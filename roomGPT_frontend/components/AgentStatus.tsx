@@ -8,9 +8,16 @@ import { AGENT_DISPLAY_NAMES, AGENT_ICONS } from "../types/chat";
 interface AgentStatusProps {
   agents: AgentStatusType[];
   isCollapsible?: boolean;
+  compact?: boolean;
+  title?: string;
 }
 
-export default function AgentStatus({ agents, isCollapsible = true }: AgentStatusProps) {
+export default function AgentStatus({
+  agents,
+  isCollapsible = true,
+  compact = false,
+  title = "AI 智能体协作状态",
+}: AgentStatusProps) {
   const [isOpen, setIsOpen] = useState(true);
 
   const getStatusColor = (status: string) => {
@@ -40,6 +47,72 @@ export default function AgentStatus({ agents, isCollapsible = true }: AgentStatu
   };
 
   const processingCount = agents.filter(a => a.status === 'processing').length;
+
+  if (compact) {
+    return (
+      <div className="mb-3 rounded-2xl border border-[#8B6F47]/15 bg-[#FBF8F2] px-3 py-3">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm">🤖</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8B6F47]">
+              {title}
+            </span>
+          </div>
+          {processingCount > 0 && (
+            <span className="rounded-full bg-[#8B6F47] px-2 py-0.5 text-[10px] text-white">
+              {processingCount} 个进行中
+            </span>
+          )}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {agents.map((agent) => (
+            <div
+              key={agent.agentName}
+              className={`rounded-xl border px-3 py-2 transition ${
+                agent.status === "processing"
+                  ? "border-[#8B6F47]/35 bg-white shadow-sm"
+                  : agent.status === "completed"
+                  ? "border-[#7A9E7E]/25 bg-[#F8FCF8]"
+                  : agent.status === "error"
+                  ? "border-red-300 bg-red-50"
+                  : "border-[#E6DDD0] bg-white/75"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-sm">{AGENT_ICONS[agent.agentName] || "🤖"}</span>
+                <span className="text-xs font-medium text-[#2D2D2D]">
+                  {AGENT_DISPLAY_NAMES[agent.agentName] || agent.agentName}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className={`text-[11px] ${
+                  agent.status === "processing"
+                    ? "text-[#8B6F47]"
+                    : agent.status === "completed"
+                    ? "text-[#5B8A72]"
+                    : agent.status === "error"
+                    ? "text-red-600"
+                    : "text-[#8A8A8A]"
+                }`}>
+                  {getStatusText(agent.status)}
+                </span>
+                <div className="h-1.5 w-16 overflow-hidden rounded-full bg-[#E9E2D8]">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{
+                      width: agent.status === "idle" ? "0%" : "100%",
+                    }}
+                    transition={{ duration: agent.status === "processing" ? 2 : 0.4 }}
+                    className={`h-full bg-gradient-to-r ${getStatusColor(agent.status)}`}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full bg-white/55 backdrop-blur-md rounded-2xl mb-4 border border-[#8B6F47]/20 shadow-lg">

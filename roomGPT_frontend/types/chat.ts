@@ -17,9 +17,27 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   imageUrl?: string;       // 如果有生成的效果图
+  renderJobId?: string;
+  renderStatus?: 'pending' | 'completed' | 'failed';
+  retryableRender?: boolean;
+  attachments?: Array<{
+    id: string;
+    url: string;
+    label: string;
+  }>;
   agentName?: string;     // 来自哪个 Agent (如: VisualAssessor, DesignPlanner, ProjectCoordinator)
   timestamp: Date;
   agentTimeline?: AgentEvent[];  // Agent 行为轨迹
+}
+
+export interface SessionSummary {
+  session_id: string;
+  title?: string;
+  first_user_message?: string;
+  latest_user_message?: string;
+  latest_message?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 /**

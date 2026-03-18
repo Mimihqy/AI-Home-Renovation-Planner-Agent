@@ -17,9 +17,9 @@ const quickPrompts = [
 
 export default function QuickPrompts({ onSelect }: QuickPromptsProps) {
   return (
-    <div className="mb-4">
+    <div className="mb-2">
       <p className="text-xs text-[#8A8A8A] mb-2">快捷提示词</p>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {quickPrompts.map((item, index) => (
           <motion.button
             key={index}
@@ -27,7 +27,7 @@ export default function QuickPrompts({ onSelect }: QuickPromptsProps) {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: index * 0.05 }}
             onClick={() => onSelect?.(item.prompt)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 hover:bg-white border border-[#8B6F47]/20 transition text-xs text-[#5A5A5A] hover:text-[#2D2D2D]"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white/70 hover:bg-white border border-[#8B6F47]/20 transition text-xs text-[#5A5A5A] hover:text-[#2D2D2D]"
           >
             <span>{item.icon}</span>
             <span>{item.text}</span>

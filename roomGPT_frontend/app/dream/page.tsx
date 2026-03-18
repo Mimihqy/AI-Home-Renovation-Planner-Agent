@@ -7,16 +7,16 @@ import Link from "next/link";
 import { Dancing_Script } from "next/font/google";
 import { CompareSlider } from "../../components/CompareSlider";
 import Footer from "../../components/Footer";
-import Header from "../../components/Header";
 import LoadingDots from "../../components/LoadingDots";
 import Toggle from "../../components/Toggle";
 import ChatInterface from "../../components/ChatInterface";
 import ChatHistoryPanel from "../../components/ChatHistoryPanel";
-import { ChatMessage } from "../../types/chat";
 import appendNewToName from "../../utils/appendNewToName";
 import downloadPhoto from "../../utils/downloadPhoto";
 import DropDown from "../../components/DropDown";
 import { roomLabels, roomType, rooms, themeLabels, themeType, themes } from "../../utils/dropdownTypes";
+import { createAndStoreSessionId, getCurrentSessionId } from "../../utils/session";
+import { ensureSessionExists } from "../../utils/api";
 
 // 加载手写字体
 const dancingScript = Dancing_Script({
@@ -32,7 +32,7 @@ const API_URL = `${API_BASE_URL}/api/chat-with-image`;
 export default function DreamPage() {
   const [mode, setMode] = useState<"generate" | "chat">("generate");
   const [sidebarOpen, setSidebarOpen] = useState(true); // 默认展开
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string>("main_session");
   const [originalPhoto, setOriginalPhoto] = useState<string | null>(null);
   const [restoredImage, setRestoredImage] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -50,16 +50,22 @@ export default function DreamPage() {
     if (saved !== null) {
       setSidebarOpen(saved === "true");
     }
+    const sessionId = getCurrentSessionId();
+    setCurrentSessionId(sessionId);
+    ensureSessionExists(sessionId).catch(() => undefined);
   }, []);
 
-  // 从历史记录加载对话
-  const handleLoadHistory = (history: ChatMessage[]) => {
-    setChatHistory(history);
-  };
+  useEffect(() => {
+    if (!error) return;
+    const timer = window.setTimeout(() => setError(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [error]);
 
   // 开始新对话
   const handleNewChat = () => {
-    setChatHistory([]);
+    const sessionId = createAndStoreSessionId();
+    setCurrentSessionId(sessionId);
+    ensureSessionExists(sessionId).catch(() => undefined);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,11 +105,13 @@ export default function DreamPage() {
     setLoading(true);
     setError(null);
 
+    await ensureSessionExists(currentSessionId).catch(() => undefined);
+
     const formData = new FormData();
     formData.append("image", file);
     formData.append("image_type", "current_room");
     formData.append("user_id", "frontend_user");
-    formData.append("session_id", "main_session");
+    formData.append("session_id", currentSessionId);
     formData.append("message", `帮我把这个${roomLabels[room]}翻新成${themeLabels[theme]}。`);
 
     try {
@@ -229,8 +237,10 @@ export default function DreamPage() {
                       <div className="w-[280px] h-full">
                         <ChatHistoryPanel
                           isOpen={sidebarOpen}
-                          onClose={() => setSidebarOpen(false)}
-                          onLoadHistory={handleLoadHistory}
+                          currentSessionId={currentSessionId}
+                          onSelectSession={(sessionId) => {
+                            setCurrentSessionId(sessionId);
+                          }}
                           onNewChat={handleNewChat}
                         />
                       </div>
@@ -261,6 +271,7 @@ export default function DreamPage() {
                       {/* 聊天界面 */}
                       <div className="flex-1 overflow-hidden bg-white/40 backdrop-blur-sm">
                         <ChatInterface
+                          sessionId={currentSessionId}
                           onError={setError}
                         />
                         {error && (
@@ -271,10 +282,6 @@ export default function DreamPage() {
                             <span className="block sm:inline">{error}</span>
                           </div>
                         )}
-                      </div>
-                      {/* 极简 Footer - 只在聊天模式显示 */}
-                      <div className="text-center py-1.5 text-xs text-[#8A8A8A]">
-                        由 <span className="font-medium text-[#8B6F47]">Lumière</span> 强力驱动
                       </div>
                     </div>
                   </motion.div>

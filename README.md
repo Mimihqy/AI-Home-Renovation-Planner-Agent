@@ -50,12 +50,11 @@
 ```bash
 # 安装基础依赖
 pip install -r requirements.txt
-# 目前也需要 fastapi 和 uvicorn
-pip install fastapi uvicorn python-multipart
 
 # 配置核心大模型 API Key
-export GOOGLE_API_KEY="your_gemini_api_key"
-# 或者在项目根目录创建 .env 文件写入：GOOGLE_API_KEY=your_gemini_api_key
+# 复制 .env.example 为 .env，然后填入本地可用的 GOOGLE_API_KEY
+# Windows PowerShell 也可以临时设置：
+$env:GOOGLE_API_KEY="your_gemini_api_key"
 
 # 启动服务 (默认运行在 8000 端口)
 python -m uvicorn server:app --host 0.0.0.0 --port 8000
@@ -75,6 +74,11 @@ npm run dev
 
 ### 3. 开始体验
 在浏览器中打开前端项目地址（通常为 `http://localhost:3000`）开始体验全新的智能家装规划师。
+
+### 本地数据说明
+- 会话、消息和图片元数据会保存在本地 SQLite：`.adk/planner.db`
+- ADK 生成和上传的图片 artifact 会保存在 `.adk/artifacts`
+- 这些文件仅用于本地开发运行，不会自动上传到远程服务
 
 ## 使用场景示例
 

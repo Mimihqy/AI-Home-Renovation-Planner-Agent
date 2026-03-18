@@ -1,87 +1,72 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ChatMessage } from "../types/chat";
-import { AGENT_DISPLAY_NAMES } from "../types/chat";
+import { fetchSessions } from "../utils/api";
+import { SessionSummary } from "../types/chat";
 
 interface ChatHistoryPanelProps {
   isOpen: boolean;
-  onClose: () => void;
-  onLoadHistory: (history: ChatMessage[]) => void;
+  currentSessionId: string;
+  onSelectSession: (sessionId: string) => void;
   onNewChat?: () => void;
 }
 
-// 模拟历史记录数据
-const mockHistory: ChatMessage[] = [
-  {
-    id: "1",
-    role: "user",
-    content: "我想把厨房改造成现代简约风格",
-    timestamp: new Date(Date.now() - 3600000),
-  },
-  {
-    id: "2",
-    role: "assistant",
-    content: "好的，现代简约风格的厨房设计注重功能性和极简美学。",
-    timestamp: new Date(Date.now() - 3590000),
-    agentName: "InfoAgent",
-  },
-  {
-    id: "3",
-    role: "user",
-    content: "客厅要北欧风，预算5万以内",
-    timestamp: new Date(Date.now() - 1800000),
-  },
-  {
-    id: "4",
-    role: "assistant",
-    content: "北欧风格的客厅设计以简洁、自然、舒适为核心。",
-    timestamp: new Date(Date.now() - 1790000),
-    agentName: "DesignPlanner",
-  },
-];
+export default function ChatHistoryPanel({
+  isOpen,
+  currentSessionId,
+  onSelectSession,
+  onNewChat,
+}: ChatHistoryPanelProps) {
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
 
-export default function ChatHistoryPanel({ isOpen, onClose, onLoadHistory, onNewChat }: ChatHistoryPanelProps) {
-  const [history, setHistory] = useState<ChatMessage[]>(mockHistory);
+  useEffect(() => {
+    fetchSessions().then(setSessions).catch(() => setSessions([]));
+  }, [currentSessionId]);
 
-  const formatDate = (date: Date) => {
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
 
-    if (days > 0) {
-      return `${days}天前`;
-    } else if (hours > 0) {
-      return `${hours}小时前`;
-    } else if (minutes > 0) {
-      return `${minutes}分钟前`;
-    } else {
-      return "刚刚";
+    if (days > 0) return `${days}天前`;
+    if (hours > 0) return `${hours}小时前`;
+    if (minutes > 0) return `${minutes}分钟前`;
+    return "刚刚";
+  };
+
+  const clampText = (value?: string, fallback = "新对话") => {
+    const text = (value || "").trim();
+    if (!text) return fallback;
+    return text.replace(/\s+/g, " ");
+  };
+
+  const getSessionTitle = (session: SessionSummary) => {
+    const rawTitle = clampText(session.title, "");
+    if (rawTitle && rawTitle !== "新对话") {
+      return rawTitle;
     }
+    return clampText(session.first_user_message || session.latest_user_message);
   };
 
-  const clearHistory = () => {
-    setHistory([]);
-  };
-
-  const handleNewChat = () => {
-    onNewChat?.();
-  };
-
-  const handleSelectHistory = (messages: ChatMessage[]) => {
-    onLoadHistory(messages);
+  const getSessionSummary = (session: SessionSummary) => {
+    const summary = clampText(session.latest_message || session.latest_user_message, "");
+    const title = getSessionTitle(session);
+    if (!summary || summary === title) {
+      return "点击继续这段装修对话";
+    }
+    return summary;
   };
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-b from-[#FAF8F5] to-[#F2ECE2] border-r border-[#8B6F47]/15">
-      {/* 头部 */}
       <div className="p-3 border-b border-[#8B6F47]/15">
         <h2 className="text-sm font-semibold text-[#2D2D2D] mb-2">历史记录</h2>
         <button
-          onClick={handleNewChat}
+          onClick={() => onNewChat?.()}
           className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#8B6F47] hover:bg-[#A68B5B] text-white rounded-lg transition text-sm font-medium"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -91,47 +76,39 @@ export default function ChatHistoryPanel({ isOpen, onClose, onLoadHistory, onNew
         </button>
       </div>
 
-      {/* 历史列表 */}
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
-        {history.length === 0 ? (
+        {sessions.length === 0 ? (
           <div className="text-center py-8">
             <div className="text-3xl mb-2 text-[#B1A99B]">📭</div>
             <p className="text-xs text-[#6B6459]">暂无历史记录</p>
           </div>
         ) : (
-          history
-            .filter(msg => msg.role === "user")
-            .map((message, index) => (
-              <motion.div
-                key={message.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-                onClick={() => handleSelectHistory([message])}
-                className="p-2 rounded-lg bg-white/70 hover:bg-white cursor-pointer transition border border-[#8B6F47]/10 hover:border-[#8B6F47]/30"
-              >
-                <p className="text-xs text-[#2D2D2D] line-clamp-2 mb-1">
-                  {message.content}
-                </p>
-                <span className="text-[10px] text-[#8A8A8A]">
-                  {formatDate(message.timestamp)}
-                </span>
-              </motion.div>
-            ))
+          sessions.map((session, index) => (
+            <motion.button
+              key={session.session_id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05 }}
+              onClick={() => onSelectSession(session.session_id)}
+              className={`w-full p-2 rounded-lg text-left transition border ${
+                session.session_id === currentSessionId
+                  ? "bg-white border-[#8B6F47]/40 shadow-sm"
+                  : "bg-white/70 hover:bg-white border-[#8B6F47]/10 hover:border-[#8B6F47]/30"
+              }`}
+            >
+              <p className="text-xs font-semibold text-[#2D2D2D] line-clamp-1">
+                {getSessionTitle(session)}
+              </p>
+              <p className="mt-1 text-[11px] leading-5 text-[#6B6459] line-clamp-2 min-h-[2.5rem]">
+                {getSessionSummary(session)}
+              </p>
+              <span className="mt-2 inline-block text-[10px] text-[#8A8A8A]">
+                {formatDate(session.updated_at)}
+              </span>
+            </motion.button>
+          ))
         )}
       </div>
-
-      {/* 底部操作 */}
-      {history.length > 0 && (
-        <div className="p-2 border-t border-[#8B6F47]/15">
-          <button
-            onClick={clearHistory}
-            className="w-full px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-600 rounded-lg transition text-xs"
-          >
-            清空历史
-          </button>
-        </div>
-      )}
     </div>
   );
 }

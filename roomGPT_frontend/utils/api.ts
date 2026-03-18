@@ -1,272 +1,289 @@
-/**
- * API 调用工具
- */
+import { ChatMessage, SessionSummary } from "../types/chat";
+import { getCurrentSessionId } from "./session";
 
-import { ChatMessage } from '../types/chat';
+const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+const DEFAULT_USER_ID = "frontend_user";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-
-/**
- * 流式响应的类型
- */
 interface StreamChunk {
-  type?: 'content' | 'image';
+  type?: "content" | "image" | "agent" | "render" | "error";
   content?: string;
   url?: string;
+  agentName?: string;
+  status?: "idle" | "processing" | "completed" | "error";
+  jobId?: string;
+  message?: string;
 }
 
-/**
- * 发送纯文本消息到后端（非流式）
- */
+interface ImagePayload {
+  currentRoomImage?: File | null;
+  inspirationImage?: File | null;
+}
+
+function buildChatMessage(data: {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  imageUrl?: string | null;
+  created_at?: string;
+}): ChatMessage {
+  return {
+    id: data.id,
+    role: data.role,
+    content: data.content,
+    imageUrl: data.imageUrl || undefined,
+    timestamp: data.created_at ? new Date(data.created_at) : new Date(),
+  };
+}
+
+async function parseSSE(
+  response: Response,
+  onChunk: (chunk: StreamChunk) => void,
+  onDone: () => void
+) {
+  const reader = response.body?.getReader();
+  const decoder = new TextDecoder();
+
+  if (!reader) {
+    throw new Error("无法获取响应流");
+  }
+
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const data = line.slice(6);
+      if (data === "[DONE]") {
+        onDone();
+        return;
+      }
+      try {
+        onChunk(JSON.parse(data));
+      } catch {
+        // Ignore incomplete chunks.
+      }
+    }
+  }
+}
+
+export async function ensureSessionExists(sessionId: string): Promise<void> {
+  const formData = new FormData();
+  formData.append("user_id", DEFAULT_USER_ID);
+  formData.append("session_id", sessionId);
+
+  await fetch(`${API_BASE_URL}/api/sessions`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function fetchSessions(): Promise<SessionSummary[]> {
+  const response = await fetch(`${API_BASE_URL}/api/sessions?user_id=${DEFAULT_USER_ID}`);
+  if (!response.ok) {
+    throw new Error("加载会话列表失败");
+  }
+  return await response.json();
+}
+
+export async function fetchSessionMessages(sessionId: string): Promise<ChatMessage[]> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/sessions/${sessionId}/messages?user_id=${DEFAULT_USER_ID}`
+  );
+  if (!response.ok) {
+    throw new Error("加载历史消息失败");
+  }
+
+  const data = await response.json();
+  return data.map((message: any) =>
+    buildChatMessage({
+      id: String(message.id),
+      role: message.role,
+      content: message.content,
+      imageUrl: message.imageUrl,
+      created_at: message.created_at,
+    })
+  );
+}
+
 export async function sendChatMessage(message: string): Promise<ChatMessage> {
   const response = await fetch(`${API_BASE_URL}/api/chat`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       message,
-      user_id: 'frontend_user',
-      session_id: 'main_session',
+      user_id: DEFAULT_USER_ID,
+      session_id: getCurrentSessionId(),
     }),
   });
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.detail || error.message || '发送消息失败');
+    throw new Error(error.detail || error.message || "发送消息失败");
   }
 
   const data = await response.json();
-  return {
+  return buildChatMessage({
     id: Date.now().toString(),
-    role: 'assistant',
+    role: "assistant",
     content: data.message,
     imageUrl: data.imageUrl,
-    timestamp: new Date(),
-  };
-}
-
-/**
- * 发送带图片的消息到后端（非流式）
- */
-export async function sendChatWithImage(
-  message: string,
-  image: File,
-  imageType: 'current_room' | 'inspiration' = 'current_room'
-): Promise<ChatMessage> {
-  const formData = new FormData();
-  formData.append('message', message);
-  formData.append('image', image);
-  formData.append('image_type', imageType);
-  formData.append('user_id', 'frontend_user');
-  formData.append('session_id', 'main_session');
-
-  const response = await fetch(`${API_BASE_URL}/api/chat-with-image`, {
-    method: 'POST',
-    body: formData,
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || error.message || '发送消息失败');
-  }
-
-  const data = await response.json();
-  return {
-    id: Date.now().toString(),
-    role: 'assistant',
-    content: data.message,
-    imageUrl: data.imageUrl,
-    timestamp: new Date(),
-  };
 }
 
-/**
- * 流式发送纯文本消息
- * @param message - 用户消息
- * @param onChunk - 每收到一个文本片段的回调
- * @param onDone - 完成时的回调
- * @param onError - 错误回调
- */
 export async function sendChatMessageStream(
   message: string,
   onChunk: (content: string) => void,
+  onAgent: (agentName: string, status: "idle" | "processing" | "completed" | "error") => void,
   onDone: () => void,
-  onError: (error: string) => void
+  onError: (error: string) => void,
+  sessionId: string
 ): Promise<void> {
   try {
     const response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message,
-        user_id: 'frontend_user',
-        session_id: 'main_session',
+        user_id: DEFAULT_USER_ID,
+        session_id: sessionId,
       }),
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || error.message || '发送消息失败');
+      throw new Error(error.detail || error.message || "发送消息失败");
     }
 
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-
-    if (!reader) {
-      throw new Error('无法获取响应流');
-    }
-
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) {
-        break;
-      }
-
-      // 解码数据块
-      const chunk = decoder.decode(value, { stream: true });
-      buffer += chunk;
-
-      // 处理 SSE 格式的数据: data: {...}\n\n
-      const lines = buffer.split('\n\n');
-      buffer = lines.pop() || ''; // 保留不完整的行
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6); // 移除 "data: " 前缀
-
-          // 检查结束标记
-          if (data === '[DONE]') {
-            onDone();
-            return;
-          }
-
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.content) {
-              onChunk(parsed.content);
-            }
-          } catch (e) {
-            // 忽略解析错误
-          }
+    await parseSSE(
+      response,
+      (chunk) => {
+        if (chunk.type === "agent" && chunk.agentName && chunk.status) {
+          onAgent(chunk.agentName, chunk.status);
+          return;
         }
-      }
-    }
+        if (chunk.type === "error" && chunk.message) {
+          onError(chunk.message);
+          return;
+        }
+        if (chunk.content) {
+          onChunk(chunk.content);
+        }
+      },
+      onDone
+    );
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : '发送消息失败';
-    onError(errorMessage);
+    onError(error instanceof Error ? error.message : "发送消息失败");
   }
 }
 
-/**
- * 流式发送带图片的消息
- * @param message - 用户消息
- * @param image - 图片文件
- * @param imageType - 图片类型
- * @param onChunk - 每收到一个文本片段的回调
- * @param onImage - 收到图片 URL 的回调
- * @param onDone - 完成时的回调
- * @param onError - 错误回调
- */
 export async function sendChatWithImageStream(
   message: string,
-  image: File,
-  imageType: 'current_room' | 'inspiration',
+  images: ImagePayload,
   onChunk: (content: string) => void,
+  onAgent: (agentName: string, status: "idle" | "processing" | "completed" | "error") => void,
   onImage: (url: string) => void,
+  onRenderQueued: (jobId: string) => void,
   onDone: () => void,
-  onError: (error: string) => void
+  onError: (error: string) => void,
+  sessionId: string
 ): Promise<void> {
   try {
     const formData = new FormData();
-    formData.append('message', message);
-    formData.append('image', image);
-    formData.append('image_type', imageType);
-    formData.append('user_id', 'frontend_user');
-    formData.append('session_id', 'main_session');
+    formData.append("message", message);
+    formData.append("user_id", DEFAULT_USER_ID);
+    formData.append("session_id", sessionId);
+
+    if (images.currentRoomImage) {
+      formData.append("current_room_image", images.currentRoomImage);
+    }
+    if (images.inspirationImage) {
+      formData.append("inspiration_image", images.inspirationImage);
+    }
 
     const response = await fetch(`${API_BASE_URL}/api/chat-with-image/stream`, {
-      method: 'POST',
+      method: "POST",
       body: formData,
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || error.message || '发送消息失败');
+      throw new Error(error.detail || error.message || "发送消息失败");
     }
 
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-
-    if (!reader) {
-      throw new Error('无法获取响应流');
-    }
-
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) {
-        break;
-      }
-
-      // 解码数据块
-      const chunk = decoder.decode(value, { stream: true });
-      buffer += chunk;
-
-      // 处理 SSE 格式的数据: data: {...}\n\n
-      const lines = buffer.split('\n\n');
-      buffer = lines.pop() || ''; // 保留不完整的行
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6); // 移除 "data: " 前缀
-
-          // 检查结束标记
-          if (data === '[DONE]') {
-            onDone();
-            return;
-          }
-
-          try {
-            const parsed: StreamChunk = JSON.parse(data);
-
-            // 处理文本内容
-            if (parsed.type === 'content' && parsed.content) {
-              onChunk(parsed.content);
-            }
-
-            // 处理图片 URL
-            if (parsed.type === 'image' && parsed.url) {
-              onImage(parsed.url);
-            }
-
-            // 兼容旧格式（没有 type 字段）
-            if (!parsed.type && parsed.content) {
-              onChunk(parsed.content);
-            }
-          } catch (e) {
-            // 忽略解析错误
-          }
+    await parseSSE(
+      response,
+      (chunk) => {
+        if (chunk.type === "agent" && chunk.agentName && chunk.status) {
+          onAgent(chunk.agentName, chunk.status);
+          return;
         }
-      }
-    }
+        if (chunk.type === "error" && chunk.message) {
+          onError(chunk.message);
+          return;
+        }
+        if (chunk.type === "image" && chunk.url) {
+          onImage(chunk.url);
+          return;
+        }
+        if (chunk.type === "render" && chunk.jobId) {
+          onRenderQueued(chunk.jobId);
+          return;
+        }
+
+        if (chunk.content) {
+          onChunk(chunk.content);
+        }
+      },
+      onDone
+    );
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : '发送消息失败';
-    onError(errorMessage);
+    onError(error instanceof Error ? error.message : "发送消息失败");
   }
 }
 
-/**
- * 检查后端健康状态
- */
 export async function checkBackendHealth(): Promise<{ status: string; api_key_configured: boolean }> {
   const response = await fetch(`${API_BASE_URL}/api/health`);
+  return await response.json();
+}
+
+export async function fetchRenderJob(jobId: string): Promise<{
+  job_id: string;
+  status: string;
+  imageUrl?: string;
+  message?: string;
+  retryable: boolean;
+}> {
+  const response = await fetch(`${API_BASE_URL}/api/render-jobs/${jobId}?user_id=${DEFAULT_USER_ID}`);
+  if (!response.ok) {
+    throw new Error("加载渲染任务失败");
+  }
+  return await response.json();
+}
+
+export async function requestRenderJob(
+  sessionId: string,
+  requestMessage = "请根据刚才的设计方案重新生成效果图。"
+): Promise<{ job_id: string; status: string }> {
+  const formData = new FormData();
+  formData.append("user_id", DEFAULT_USER_ID);
+  formData.append("request_message", requestMessage);
+
+  const response = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}/render`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || error.message || "创建渲染任务失败");
+  }
   return await response.json();
 }

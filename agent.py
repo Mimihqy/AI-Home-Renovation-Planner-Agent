@@ -55,9 +55,9 @@ def estimate_renovation_cost(
         square_footage: Room size in square feet
     
     Returns:
-        Estimated cost range
+        Estimated cost range for Chinese users in RMB
     """
-    # Cost per sq ft estimates (2024 ranges)
+    # Cost per sq ft estimates (used only as a rough internal baseline before converting to RMB)
     rates = {
         "kitchen": {"cosmetic": (50, 100), "moderate": (150, 250), "full": (300, 500), "luxury": (600, 1200)},
         "bathroom": {"cosmetic": (75, 125), "moderate": (200, 350), "full": (400, 600), "luxury": (800, 1500)},
@@ -75,10 +75,33 @@ def estimate_renovation_cost(
     
     low, high = rates[room][scope_level]
     
-    total_low = low * square_footage
-    total_high = high * square_footage
-    
-    return f"💰 Estimated Cost: ${total_low:,} - ${total_high:,} ({scope_level} {room_type} renovation, ~{square_footage} sq ft)"
+    total_low_usd = low * square_footage
+    total_high_usd = high * square_footage
+
+    usd_to_cny = 7.2
+    total_low_cny = int(total_low_usd * usd_to_cny)
+    total_high_cny = int(total_high_usd * usd_to_cny)
+    square_meters = max(1, round(square_footage * 0.0929, 1))
+
+    scope_labels = {
+        "cosmetic": "软装优化/轻改造",
+        "moderate": "中度翻新",
+        "full": "整体翻新",
+        "luxury": "高配精装",
+    }
+    room_labels = {
+        "kitchen": "厨房",
+        "bathroom": "卫生间",
+        "bedroom": "卧室",
+        "living_room": "客厅",
+    }
+
+    return (
+        f"预算参考：约人民币 {total_low_cny:,} - {total_high_cny:,} 元"
+        f"（{room_labels.get(room, room_type)}，{scope_labels.get(scope_level, scope_level)}，"
+        f"约 {square_meters} 平方米 / {square_footage} 平方英尺）。"
+        " 请优先按中国本地市场的材料、人工和城市差异理解这一区间。"
+    )
 
 
 def calculate_timeline(
@@ -95,16 +118,16 @@ def calculate_timeline(
         Estimated timeline with phases
     """
     timelines = {
-        "cosmetic": "1-2 weeks (quick refresh)",
-        "moderate": "3-6 weeks (includes some structural work)",
-        "full": "2-4 months (complete transformation)",
-        "luxury": "4-6 months (custom work, high-end finishes)"
+        "cosmetic": "1-2 周（软装优化或轻改造）",
+        "moderate": "3-6 周（含部分定制与施工）",
+        "full": "2-4 个月（整体翻新）",
+        "luxury": "4-6 个月（高配定制与精细施工）"
     }
     
     scope_level = scope.lower()
     timeline = timelines.get(scope_level, timelines["moderate"])
     
-    return f"⏱️ Estimated Timeline: {timeline}"
+    return f"施工周期参考：{timeline}"
 
 
 # ============================================================================
@@ -122,12 +145,14 @@ WHEN TO USE: The coordinator routes general questions and casual greetings to yo
 
 YOUR RESPONSE:
 - Keep it brief and helpful (2-4 sentences)
+- Respond in Simplified Chinese unless the user explicitly asks for another language
 - Explain the system helps with home renovations using visual AI
 - Mention capabilities: photo analysis, design planning, budget estimation, timeline coordination
 - Ask about their renovation project (which room, can they share photos?)
+- Use Chinese user context by default: RMB, square meters, Chinese home furnishing and renovation habits
 
 EXAMPLE:
-"Hi! I'm your AI Home Renovation Planner. I can analyze photos of your current space and inspiration images to create a personalized renovation plan with design suggestions, budget estimates, and timelines. Which room are you thinking of renovating? Feel free to share photos if you have them!"
+"你好，我可以帮你分析当前房间照片和灵感图，整理出更适合落地的装修方案，包括设计建议、预算参考和周期安排。你现在想改的是哪个空间？如果方便的话，也可以直接发我房间图片。"
 
 Be enthusiastic about home improvement and helpful!
 """,
@@ -147,13 +172,13 @@ You refine existing renovation renderings.
 
 **TASK**: User wants to modify an existing rendering (e.g., "make cabinets cream", "darker flooring").
 
-**CRITICAL**: Find the most recent rendering filename from conversation history!
-Look for: "Saved as artifact: [filename]" or "kitchen_modern_renovation_v1.png" type references.
+**CRITICAL**: Prefer the latest rendering already stored in session state.
+Only search conversation history for a filename if you truly need it.
 
 Use **edit_renovation_rendering** tool:
 
 Parameters:
-1. artifact_filename: The exact filename of the most recent rendering
+1. artifact_filename: Optional. Omit it to use the most recent rendering already stored in session state.
 2. prompt: Very specific edit instruction (be detailed!)
 3. asset_name: Base name without _vX (e.g., "kitchen_modern_renovation")
 
@@ -162,8 +187,7 @@ User: "Make the cabinets cream instead of white"
 Last rendering: "kitchen_modern_renovation_v1.png"
 
 Call: edit_renovation_rendering(
-  artifact_filename="kitchen_modern_renovation_v1.png",
-  prompt="Change the kitchen cabinets from white to a soft cream color (Benjamin Moore Cream Silk OC-14). Keep all other elements exactly the same: flooring, countertops, backsplash, lighting, appliances, and layout.",
+  prompt="将厨房柜门从白色改成柔和的奶油色，保留其他元素完全不变，包括地面、台面、墙砖、灯光、电器和整体布局。",
   asset_name="kitchen_modern_renovation"
 )
 
@@ -192,6 +216,13 @@ You are a visual AI specialist. Analyze ANY uploaded images and detect their typ
 
 **IMPORTANT NOTE**: You can SEE and ANALYZE uploaded images, but currently the image editing feature
 has limitations in ADK Web. Focus on providing detailed analysis and design recommendations.
+
+OUTPUT RULES FOR CHINESE USERS:
+- Respond in Simplified Chinese unless the user explicitly asks for another language
+- Prioritize Chinese home renovation context: use square meters first, RMB first, and Chinese-friendly material/furniture descriptions
+- Avoid long English headings mixed into Chinese paragraphs unless it is truly necessary
+- If referencing a brand or product, prefer neutral material descriptions or examples available to Chinese users; do not default to overseas-only brands
+- Keep structure clear and concise; avoid repeating the same plan multiple times
 
 AUTOMATICALLY DETECT:
 1. If image shows a CURRENT ROOM (existing space that needs renovation)
@@ -240,10 +271,10 @@ If budget mentioned:
 - Use estimate_renovation_cost tool with detected room type and appropriate scope
 - Assess what's achievable within budget
 
-**IMPORTANT: At the end of your analysis, output a structured summary:**
+**IMPORTANT: At the end of your analysis, output a structured summary in Chinese:**
 
 ```
-ASSESSMENT COMPLETE
+分析完成
 
 Images Provided:
 - Current room photo: [Yes/No - describe what you see if yes]
@@ -255,7 +286,7 @@ Room Details:
 - Desired Style: [from inspiration photo or user description]
 - Key Issues: [problems to address]
 - Improvement Opportunities: [suggested improvements]
-- Budget Constraint: $[amount if mentioned, or "Not specified"]
+- Budget Constraint: [预算金额；优先使用人民币，未提及时写“未说明”]
 
 **EXACT LAYOUT TO PRESERVE (critical for rendering):**
 - Windows: [exact positions and sizes]
@@ -282,6 +313,13 @@ design_planner = LlmAgent(
 Read from state: room_analysis, style_preferences, room_type, key_issues, opportunities, budget_constraint
 
 Create SPECIFIC, ACTIONABLE design plan tailored to their situation.
+
+OUTPUT RULES FOR CHINESE USERS:
+- Respond in Simplified Chinese unless the user explicitly asks for another language
+- Default to RMB, square meters, and Chinese renovation vocabulary
+- Recommendations should fit Chinese users' purchasing habits: describe materials, colors, and styles first; if giving examples, prefer generic categories or brands commonly accessible in China
+- Do not default to North American-only brands, store names, or pricing language
+- Avoid duplicating the same plan in multiple formats unless it adds clear value
 
 **CRITICAL RULE - PRESERVE EXACT LAYOUT:**
 The design plan must KEEP THE EXACT SAME LAYOUT as the current room. DO NOT suggest:
@@ -323,10 +361,10 @@ If no inspiration: Use style_preferences from state
 
 Use calculate_timeline tool with room_type and renovation_scope.
 
-**IMPORTANT: At the end, provide a structured summary:**
+**IMPORTANT: At the end, provide a structured summary in Chinese:**
 
 ```
-DESIGN COMPLETE
+设计完成
 
 Renovation Scope: [cosmetic/moderate - NO structural changes]
 Layout: PRESERVED EXACTLY (no changes to cabinet positions, appliance locations, or room structure)
@@ -340,8 +378,8 @@ Surface Finish Changes:
 - Hardware: [style/finish]
 - Lighting: [upgrades]
 
-Materials Summary:
-[Detailed list with product names and color codes]
+材料清单摘要:
+[详细列出材料、颜色、规格；优先使用中国用户易理解的叫法]
 ```
 
 Be SPECIFIC with product names, colors, dimensions. The rendering must show the EXACT same layout with only the surface finishes changed.
@@ -353,38 +391,25 @@ Be SPECIFIC with product names, colors, dimensions. The rendering must show the 
 project_coordinator = LlmAgent(
     name="ProjectCoordinator",
     model="gemini-3-flash-preview",
-    description="Coordinates renovation timeline, budget, execution plan, and generates photorealistic renderings",
+    description="Generates the final photorealistic rendering based on the approved design plan",
     instruction="""
-Read conversation history to extract:
-- Image detection info from Visual Assessor (current room photo? inspiration photo? filenames?)
-- Design specifications from Design Planner
-- Budget constraints mentioned
+Read conversation history and session context to extract:
+- The current room layout from Visual Assessor
+- The approved design direction from Design Planner
+- Any constraints or refinements mentioned by the user
 
-Create CLEAN, SCANNABLE final plan.
+YOUR PRIMARY JOB:
+- Focus on generating the visual rendering as quickly as possible
+- Do NOT repeat the full renovation plan, long budget sections, or long execution checklists
+- Use the existing room layout and latest design plan from the conversation
 
-## Renovation Plan
+OUTPUT RULES FOR CHINESE USERS:
+- Respond in Simplified Chinese unless the user explicitly asks for another language
+- Keep the final response concise
+- If rendering succeeds, use only 2-3 sentences to summarize what the image shows
+- If rendering fails, clearly state that the text plan is already complete but the rendering service is busy, and suggest retrying later
 
-**Budget Breakdown**:
-- Materials: $[amount]
-- Labor: $[amount]
-- Permits/fees: $[amount]
-- Contingency (10%): $[amount]
-- **Total**: $[amount]
-[If budget_constraint exists: Show "Within your $X budget ✓" or suggest phasing]
-
-**Timeline**: [X weeks, broken into phases]
-**Contractors Needed**: [specific trades]
-
-## Design Summary
-[Pull key points from design_plan - tight, scannable bullets]
-
-## Action Checklist
-1. [immediate first steps]
-2. [subsequent actions]
-
-## 🎨 Visual Rendering: Your Renovated Space
-
-**🎨 Generate Visual Rendering:**
+## 生成效果图
 
 Use **generate_renovation_rendering** tool to CREATE a photorealistic rendering:
 
@@ -410,7 +435,7 @@ Build an ULTRA-DETAILED prompt using the **SLC Formula** (Subject, Lighting, Cam
 - Same room dimensions and camera angle as original
 
 **Surface Finish Details (ONLY changes - be VERY specific with textures):**
-- Cabinets: [e.g., 'smooth matte Benjamin Moore Simply White OC-117 shaker-style cabinets with subtle panel details']
+- Cabinets: [e.g., '哑光暖白色柜门，细窄边框造型，表面平整细腻']
 - Countertops: [e.g., 'honed Carrara marble with delicate grey veining and soft matte finish']
 - Flooring: [e.g., 'wide-plank white oak with natural grain variation and satin finish']
 - Backsplash: [e.g., 'classic white subway tile in herringbone pattern with light grey grout']
@@ -439,7 +464,7 @@ Parameters:
 - asset_name: "[room_type]_[style_keyword]_renovation" (e.g., "kitchen_modern_farmhouse_renovation")
 
 **After generating:**
-Briefly describe (2-3 sentences) key features visible in the rendering and how it addresses their needs.
+Briefly describe in Chinese (2-3 sentences) the key features visible in the rendering and how it addresses their needs.
 
 **IMPORTANT - DO NOT use markdown image syntax!**
 - Do NOT output `![image](filename.png)` or similar markdown image links
@@ -447,7 +472,10 @@ Briefly describe (2-3 sentences) key features visible in the rendering and how i
 - Simply mention that the rendering has been generated and saved as an artifact
 - The user can view the artifact through the artifacts panel
 
-**Note**: The enhanced SLC formula (Subject, Lighting, Camera) creates professional-grade photorealistic renderings.
+**文案要求补充：**
+- Prefer Chinese-only wording
+- Explain paint colors and materials in Chinese first
+- Do not restate the full budget and execution plan unless the user explicitly asks
 """,
     tools=[generate_renovation_rendering, edit_renovation_rendering, list_renovation_renderings],
 )
@@ -456,11 +484,10 @@ Briefly describe (2-3 sentences) key features visible in the rendering and how i
 # Create the planning pipeline (runs only when coordinator routes planning requests here)
 planning_pipeline = SequentialAgent(
     name="PlanningPipeline",
-    description="Full renovation planning pipeline: Visual Assessment → Design Planning → Project Coordination",
+    description="Fast renovation planning pipeline: Visual Assessment → Design Planning",
     sub_agents=[
         visual_assessor,
         design_planner,
-        project_coordinator,
     ],
 )
 
@@ -513,4 +540,4 @@ Be a smart router - match intent!
 )
 
 
-__all__ = ["root_agent"]
+__all__ = ["root_agent", "project_coordinator"]

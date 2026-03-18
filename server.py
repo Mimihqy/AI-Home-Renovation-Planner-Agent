@@ -1,32 +1,50 @@
-import os
-import uuid
-import logging
+import asyncio
 import json
-from typing import Optional, List, AsyncGenerator
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import StreamingResponse, JSONResponse
-from pydantic import BaseModel
+import logging
+import os
+import re
+import uuid
+from typing import Any, AsyncGenerator, Optional
+
 from dotenv import load_dotenv
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response, StreamingResponse
+from pydantic import BaseModel
 
-from agent import root_agent
+from agent import project_coordinator, root_agent
+from google.adk.agents.run_config import RunConfig, StreamingMode
+from db import (
+    create_render_job,
+    ensure_session,
+    get_render_job,
+    get_messages,
+    init_db,
+    list_sessions,
+    save_asset,
+    save_message,
+    session_state_snapshot,
+    update_render_job,
+)
 
-# Initialize environment & logging
+
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize FastAPI App
+APP_NAME = "AI_Home_Renovation"
+DEFAULT_USER = "frontend_user"
+DEFAULT_SESSION = "main_session"
+ARTIFACT_ROOT = os.path.join(os.getcwd(), ".adk", "artifacts")
+
 app = FastAPI(title="AI Home Renovation Planner API")
 
 frontend_origins = os.getenv(
     "FRONTEND_ORIGINS",
-    "http://localhost:3000,http://127.0.0.1:3000"
+    "http://localhost:3000,http://127.0.0.1:3000",
 )
 allowed_origins = [origin.strip() for origin in frontend_origins.split(",") if origin.strip()]
 
-# Setup CORS for local Frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -35,326 +53,517 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Ensure artifacts directory exists for serving generated images
-ARTIFACTS_DIR = os.path.join(os.getcwd(), ".adk", "artifacts")
-os.makedirs(ARTIFACTS_DIR, exist_ok=True)
-app.mount("/artifacts", StaticFiles(directory=ARTIFACTS_DIR), name="artifacts")
-
-# Global variables for session/engine
 runner = None
-DEFAULT_USER = "frontend_user"
-DEFAULT_SESSION = "main_session"
+render_runner = None
+artifact_service = None
+TRACKED_AGENTS = {
+    "HomeRenovationPlanner",
+    "InfoAgent",
+    "VisualAssessor",
+    "DesignPlanner",
+    "ProjectCoordinator",
+    "RenderingEditor",
+}
 
-@app.on_event("startup")
-async def startup_event():
-    global runner
-    from google.adk.runners import Runner
-    from google.adk.sessions.in_memory_session_service import InMemorySessionService
-    from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
+USD_TO_CNY = 7.2
+HEADING_REPLACEMENTS = {
+    "Current Space Analysis": "现有空间分析",
+    "Room Details": "空间信息",
+    "Design Summary": "设计摘要",
+    "Budget Breakdown": "预算拆分",
+    "Timeline": "周期安排",
+    "Action Checklist": "执行清单",
+    "Images Provided": "图片输入情况",
+    "Improvement Opportunities": "可优化点",
+    "Budget Constraint": "预算约束",
+    "ASSESSMENT COMPLETE": "分析完成",
+    "DESIGN COMPLETE": "设计完成",
+    "Materials Summary": "材料清单摘要",
+    "Current Analysis": "现状分析",
+    "Desired Style": "目标风格",
+    "Key Issues": "关键问题",
+    "Special features": "特殊结构",
+    "Camera angle": "拍摄视角",
+    "Contractors Needed": "建议工种",
+}
+TERM_REPLACEMENTS = {
+    "sq ft": "平方英尺",
+    "square feet": "平方英尺",
+    "square foot": "平方英尺",
+    "Current room photo": "当前房间图",
+    "Inspiration photo": "灵感图",
+    "Must-haves": "优先投入",
+    "Nice-to-haves": "可选升级",
+    "Layout": "布局",
+    "Budget-Conscious Approach": "预算策略",
+    "Design Specifications": "设计规格",
+}
+BRAND_REPLACEMENTS = {
+    "Benjamin Moore": "高品质乳胶漆",
+    "West Elm": "现代家居品牌",
+    "Article": "现代家具品牌",
+    "Architectural Digest": "高端家居杂志风格",
+}
 
-    session_service = InMemorySessionService()
-    artifact_service = InMemoryArtifactService()
-
-    # Create the ADK Runner with the root agent
-    runner = Runner(
-        agent=root_agent,
-        app_name="AI_Home_Renovation",
-        session_service=session_service,
-        artifact_service=artifact_service,
-        auto_create_session=True
-    )
-    logger.info("ADK Runner initialized and ready.")
 
 class ChatRequest(BaseModel):
     message: str
     user_id: str = DEFAULT_USER
     session_id: str = DEFAULT_SESSION
 
+
 class ChatResponse(BaseModel):
     message: str
     imageUrl: Optional[str] = None
-    artifacts: List[str] = []
 
 
-async def stream_text_events(events: AsyncGenerator) -> AsyncGenerator[str, None]:
-    """流式输出文本事件"""
+class SessionResponse(BaseModel):
+    session_id: str
+    title: Optional[str] = None
+    latest_user_message: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class MessageResponse(BaseModel):
+    id: str
+    role: str
+    content: str
+    imageUrl: Optional[str] = None
+    created_at: str
+
+
+class RenderJobResponse(BaseModel):
+    job_id: str
+    status: str
+    imageUrl: Optional[str] = None
+    message: Optional[str] = None
+    retryable: bool = False
+
+
+def require_api_key() -> None:
+    if "GOOGLE_API_KEY" not in os.environ and "GEMINI_API_KEY" not in os.environ:
+        raise HTTPException(
+            status_code=500,
+            detail="Missing GOOGLE_API_KEY or GEMINI_API_KEY. Please configure it in the local .env file.",
+        )
+
+
+async def ensure_adk_session(user_id: str, session_id: str):
+    session = await runner.session_service.get_session(
+        app_name=APP_NAME,
+        user_id=user_id,
+        session_id=session_id,
+    )
+    if session is None:
+        session = await runner.session_service.create_session(
+            app_name=APP_NAME,
+            user_id=user_id,
+            session_id=session_id,
+        )
+    state_snapshot = session_state_snapshot(session_id=session_id, user_id=user_id)
+    session.state.update(state_snapshot)
+    return session
+
+
+def build_asset_url(request: Request, session_id: str, filename: str, user_id: str) -> str:
+    return str(
+        request.url_for(
+            "get_asset",
+            session_id=session_id,
+            filename=filename,
+        ).include_query_params(user_id=user_id)
+    )
+
+
+async def save_uploaded_asset(
+    *,
+    file: UploadFile,
+    asset_type: str,
+    user_id: str,
+    session_id: str,
+) -> tuple[str, int, Any]:
+    from google.genai import types
+
+    image_data = await file.read()
+    if not image_data:
+        raise HTTPException(status_code=400, detail=f"Uploaded {asset_type} image is empty.")
+
+    extension = os.path.splitext(file.filename or "")[1] or ".png"
+    artifact_filename = f"{asset_type}_{uuid.uuid4().hex[:8]}{extension}"
+    image_part = types.Part.from_bytes(data=image_data, mime_type=file.content_type or "image/png")
+
+    version = await artifact_service.save_artifact(
+        app_name=APP_NAME,
+        user_id=user_id,
+        session_id=session_id,
+        filename=artifact_filename,
+        artifact=image_part,
+        custom_metadata={"asset_type": asset_type},
+    )
+
+    save_asset(
+        session_id=session_id,
+        user_id=user_id,
+        filename=artifact_filename,
+        asset_type=asset_type,
+        version=version,
+        metadata={"original_filename": file.filename},
+    )
+    return artifact_filename, version, image_part
+
+
+async def prepare_message_content(
+    *,
+    message: str,
+    user_id: str,
+    session_id: str,
+    current_room_image: UploadFile | None = None,
+    inspiration_image: UploadFile | None = None,
+    image: UploadFile | None = None,
+    image_type: str | None = None,
+):
+    from google.genai import types
+
+    parts = [types.Part.from_text(text=message)]
+    uploaded_assets: list[dict[str, str]] = []
+    session = await ensure_adk_session(user_id=user_id, session_id=session_id)
+
+    if image and not current_room_image and not inspiration_image:
+        if image_type == "inspiration":
+            inspiration_image = image
+        else:
+            current_room_image = image
+
+    if current_room_image:
+        artifact_filename, version, image_part = await save_uploaded_asset(
+            file=current_room_image,
+            asset_type="current_room",
+            user_id=user_id,
+            session_id=session_id,
+        )
+        uploaded_assets.append({"filename": artifact_filename, "asset_type": "current_room"})
+        session.state["latest_current_room_image"] = artifact_filename
+        session.state.setdefault("reference_images", {})[artifact_filename] = {
+            "type": "current_room",
+            "version": version,
+        }
+        parts.append(image_part)
+
+    if inspiration_image:
+        artifact_filename, version, image_part = await save_uploaded_asset(
+            file=inspiration_image,
+            asset_type="inspiration",
+            user_id=user_id,
+            session_id=session_id,
+        )
+        uploaded_assets.append({"filename": artifact_filename, "asset_type": "inspiration"})
+        session.state["latest_inspiration_image"] = artifact_filename
+        session.state["latest_reference_image"] = artifact_filename
+        session.state.setdefault("reference_images", {})[artifact_filename] = {
+            "type": "inspiration",
+            "version": version,
+        }
+        parts.append(image_part)
+
+    return types.Content(role="user", parts=parts), uploaded_assets
+
+
+async def extract_reply_text(events: AsyncGenerator) -> str:
+    reply_texts: list[str] = []
     async for event in events:
         if event.content and event.content.parts:
             for part in event.content.parts:
                 if part.text:
-                    # 实时输出每个文本片段
-                    yield part.text
+                    reply_texts.append(part.text)
+    return normalize_assistant_output("".join(reply_texts))
 
 
-async def stream_with_image_events(events: AsyncGenerator) -> AsyncGenerator[str, None]:
-    """流式输出文本事件（带图片的版本）"""
-    async for event in events:
-        if event.content and event.content.parts:
-            for part in event.content.parts:
-                if part.text:
-                    yield part.text
+async def get_result_image_filename(user_id: str, session_id: str) -> Optional[str]:
+    session = await runner.session_service.get_session(
+        app_name=APP_NAME,
+        user_id=user_id,
+        session_id=session_id,
+    )
+    if session is None:
+        return None
+    return session.state.get("latest_result_image") or session.state.get("last_generated_rendering")
 
 
-@app.post("/api/chat")
-async def chat_endpoint(request: ChatRequest):
-    """
-    Standard text-only chat endpoint with streaming support.
+async def stream_text_sse(text: str, *, chunk_size: int = 28) -> AsyncGenerator[str, None]:
+    if not text:
+        return
+    normalized = text.replace("\r\n", "\n")
+    for index in range(0, len(normalized), chunk_size):
+        chunk = normalized[index:index + chunk_size]
+        yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
+        await asyncio.sleep(0)
 
-    支持 query 参数:
-    - stream=false: 返回普通 JSON 响应（完整消息）
-    - stream=true: 返回流式响应（实时输出）
-    """
-    if "GOOGLE_API_KEY" not in os.environ and "GEMINI_API_KEY" not in os.environ:
-        raise HTTPException(status_code=500, detail="Missing GOOGLE_API_KEY environment variable. Please configure it in .env")
 
+def _format_cny_value(value: float) -> str:
+    if value >= 10000:
+        rounded = round(value / 10000, 1)
+        trailing = ".0" if rounded == int(rounded) else ""
+        return f"{rounded}{trailing}万元".replace(".0万元", "万元")
+    return f"{int(round(value)):,}元"
+
+
+def normalize_currency_ranges(text: str) -> str:
+    def replace_range(match: re.Match[str]) -> str:
+        low = int(match.group(1).replace(",", ""))
+        high = int(match.group(2).replace(",", ""))
+        return (
+            f"约人民币 {_format_cny_value(low * USD_TO_CNY)} - {_format_cny_value(high * USD_TO_CNY)}"
+            "（按当前预设汇率估算）"
+        )
+
+    def replace_single(match: re.Match[str]) -> str:
+        amount = int(match.group(1).replace(",", ""))
+        return f"约人民币 {_format_cny_value(amount * USD_TO_CNY)}（按当前预设汇率估算）"
+
+    text = re.sub(r"\$([\d,]+)\s*-\s*\$([\d,]+)", replace_range, text)
+    text = re.sub(r"(?<![\w$])\$([\d,]+)(?!\s*-\s*\$)", replace_single, text)
+    return text
+
+
+def normalize_area_units(text: str) -> str:
+    def replace_area(match: re.Match[str]) -> str:
+        value = float(match.group(1).replace(",", ""))
+        sqm = round(value * 0.0929, 1)
+        if sqm.is_integer():
+            sqm_text = f"{int(sqm)}"
+        else:
+            sqm_text = f"{sqm}"
+        original = int(value) if value.is_integer() else value
+        return f"约 {sqm_text} 平方米（{original} 平方英尺）"
+
+    patterns = [
+        r"(\d+(?:\.\d+)?)\s*(?:sq ft|square feet|square foot)",
+        r"(\d+(?:\.\d+)?)\s*平方英尺",
+    ]
+    for pattern in patterns:
+        text = re.sub(pattern, replace_area, text, flags=re.IGNORECASE)
+    return text
+
+
+def dedupe_repeated_lines(text: str) -> str:
+    lines = text.splitlines()
+    result: list[str] = []
+    previous_normalized = ""
+    for line in lines:
+        normalized = re.sub(r"\s+", " ", line).strip()
+        if normalized and normalized == previous_normalized:
+            continue
+        result.append(line)
+        if normalized:
+            previous_normalized = normalized
+    return "\n".join(result)
+
+
+def normalize_assistant_output(text: str) -> str:
+    if not text:
+        return text
+
+    normalized = text.replace("\r\n", "\n")
+    for source, target in HEADING_REPLACEMENTS.items():
+        normalized = normalized.replace(source, target)
+    for source, target in TERM_REPLACEMENTS.items():
+        normalized = normalized.replace(source, target)
+    for source, target in BRAND_REPLACEMENTS.items():
+        normalized = normalized.replace(source, target)
+
+    normalized = normalize_currency_ranges(normalized)
+    normalized = normalize_area_units(normalized)
+    normalized = re.sub(r"\*\*Images Provided:\*\*", "**图片输入情况：**", normalized)
+    normalized = re.sub(r"\*\*Room Details:\*\*", "**空间信息：**", normalized)
+    normalized = re.sub(r"\*\*EXACT LAYOUT TO PRESERVE.*?\*\*", "**需保留的原始布局：**", normalized)
+    normalized = re.sub(r"\bsoft cream color\b", "柔和奶油色", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\bmodern farmhouse\b", "现代 farmhouse 风格", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\bScandi-Rustic\b", "现代北欧原木风", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\bCurrent room\b", "当前空间", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\bInspiration\b", "灵感参考", normalized, flags=re.IGNORECASE)
+    normalized = dedupe_repeated_lines(normalized)
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized).strip()
+    return normalized
+
+
+def build_render_completion_message(success: bool, details: str | None = None) -> str:
+    if success:
+        return normalize_assistant_output(
+            details
+            or "效果图已经生成完成。我根据刚才确认的空间分析和设计方案输出了最终视觉预览，你可以继续告诉我想调整的局部。"
+        )
+    return normalize_assistant_output(
+        details
+        or "文字方案已经整理完成，但当前效果图服务繁忙，暂时未成功生成渲染图。你可以稍后点击“重新生成效果图”再次尝试。"
+    )
+
+
+async def queue_render_job(
+    *,
+    user_id: str,
+    session_id: str,
+    request_message: str,
+) -> str:
+    job_id = uuid.uuid4().hex
+    create_render_job(
+        job_id=job_id,
+        session_id=session_id,
+        user_id=user_id,
+        request_message=request_message,
+    )
+    asyncio.create_task(
+        process_render_job(
+            job_id=job_id,
+            user_id=user_id,
+            session_id=session_id,
+            request_message=request_message,
+        )
+    )
+    return job_id
+
+
+async def process_render_job(
+    *,
+    job_id: str,
+    user_id: str,
+    session_id: str,
+    request_message: str,
+) -> None:
+    from google.genai import types
+
+    update_render_job(job_id, status="running")
     try:
-        from google.genai import types
-        message_content = types.Content(role="user", parts=[types.Part.from_text(text=request.message)])
-        events = runner.run_async(
-            user_id=request.user_id,
-            session_id=request.session_id,
-            new_message=message_content
+        session = await ensure_adk_session(user_id=user_id, session_id=session_id)
+        session.state["background_render_job"] = job_id
+
+        prompt = (
+            "请根据当前会话里已经完成的空间分析和设计方案，直接生成效果图。"
+            "不要重复完整文字方案，只需调用渲染工具，并在成功后用2到3句中文简短说明画面亮点。"
+            "如果渲染失败，请明确说明文字方案已完成，但效果图服务繁忙，建议稍后重试。"
+            f"\n\n用户原始诉求：{request_message}"
         )
-
-        reply_texts = []
-        async for event in events:
-            if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if part.text:
-                        reply_texts.append(part.text)
-
-        reply_text = "".join(reply_texts)
-        return ChatResponse(
-            message=reply_text,
-            artifacts=[]
+        events = render_runner.run_async(
+            user_id=user_id,
+            session_id=session_id,
+            new_message=types.Content(role="user", parts=[types.Part.from_text(text=prompt)]),
         )
-    except Exception as e:
-        logger.error(f"Error during chat: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/chat/stream")
-async def chat_stream_endpoint(request: ChatRequest):
-    """
-    流式文本对话端点 - 实时输出 AI 回复
-
-    使用 SSE (Server-Sent Events) 格式返回
-    """
-    if "GOOGLE_API_KEY" not in os.environ and "GEMINI_API_KEY" not in os.environ:
-        raise HTTPException(status_code=500, detail="Missing GOOGLE_API_KEY environment variable. Please configure it in .env")
-
-    try:
-        from google.genai import types
-        message_content = types.Content(role="user", parts=[types.Part.from_text(text=request.message)])
-        events = runner.run_async(
-            user_id=request.user_id,
-            session_id=request.session_id,
-            new_message=message_content
-        )
-
-        async def event_stream():
-            """生成 SSE 格式的流式响应"""
-            async for event in events:
-                if event.content and event.content.parts:
-                    for part in event.content.parts:
-                        if part.text:
-                            # SSE 格式: data: <内容>
-                            yield f"data: {json.dumps({'content': part.text})}\n\n"
-            # 发送结束标记
-            yield "data: [DONE]\n\n"
-
-        return StreamingResponse(
-            event_stream(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-            }
-        )
-    except Exception as e:
-        logger.error(f"Error during chat stream: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/chat-with-image/stream")
-async def chat_with_image_stream_endpoint(
-    message: str = Form(...),
-    image: UploadFile = File(None),
-    image_type: str = Form("current_room"), # "current_room" or "inspiration"
-    user_id: str = Form(DEFAULT_USER),
-    session_id: str = Form(DEFAULT_SESSION)
-):
-    """
-    流式带图片对话端点 - 实时输出 AI 回复和图片链接
-    """
-    if "GOOGLE_API_KEY" not in os.environ and "GEMINI_API_KEY" not in os.environ:
-        raise HTTPException(status_code=500, detail="Missing GOOGLE_API_KEY environment variable.")
-
-    try:
-        image_artifact_url = None
-
-        if image:
-            # Read image content
-            image_data = await image.read()
-            mime_type = image.content_type
-
-            # Save the raw image as an artifact first
-            artifact_name = f"{image_type}_{uuid.uuid4().hex[:8]}.{image.filename.split('.')[-1]}"
-
-            # ADK's storage logic expects artifacts in .adk/artifacts/<user>/<sess>/
-            user_sess_dir = os.path.join(ARTIFACTS_DIR, user_id, session_id)
-            os.makedirs(user_sess_dir, exist_ok=True)
-
-            file_path = os.path.join(user_sess_dir, artifact_name)
-            with open(file_path, "wb") as f:
-                f.write(image_data)
-
-            # Create a Google GenAI Part from bytes for the LLM request
-            from google.genai import types
-            image_part = types.Part.from_bytes(data=image_data, mime_type=mime_type)
-            text_part = types.Part.from_text(text=message)
-            message_content = types.Content(role="user", parts=[text_part, image_part])
-
-            # Now run the runner passing BOTH the text and the image part
-            events = runner.run_async(
-                user_id=user_id,
+        reply_text = await extract_reply_text(events)
+        result_filename = await get_result_image_filename(user_id, session_id)
+        if result_filename:
+            update_render_job(job_id, status="completed", result_filename=result_filename)
+            save_message(
                 session_id=session_id,
-                new_message=message_content
+                user_id=user_id,
+                role="assistant",
+                content=build_render_completion_message(True, reply_text),
+                image_filename=result_filename,
             )
         else:
-            from google.genai import types
-            # Fallback to standard text run
-            message_content = types.Content(role="user", parts=[types.Part.from_text(text=message)])
-            events = runner.run_async(
-                user_id=user_id,
-                session_id=session_id,
-                new_message=message_content
+            update_render_job(
+                job_id,
+                status="failed",
+                error_message="当前效果图服务繁忙，可稍后重新生成。",
             )
-
-        async def event_stream():
-            """生成 SSE 格式的流式响应"""
-            async for event in events:
-                if event.content and event.content.parts:
-                    for part in event.content.parts:
-                        if part.text:
-                            # SSE 格式: data: <内容>
-                            yield f"data: {json.dumps({'type': 'content', 'content': part.text})}\n\n"
-
-            # 获取最新生成的图片 URL
-            latest_image_url = None
-            user_sess_dir = os.path.join(ARTIFACTS_DIR, user_id, session_id)
-            if os.path.exists(user_sess_dir):
-                files = [os.path.join(user_sess_dir, f) for f in os.listdir(user_sess_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-                if files:
-                    files.sort(key=os.path.getmtime, reverse=True)
-                    latest_file = os.path.basename(files[0])
-                    latest_image_url = f"http://localhost:8000/artifacts/{user_id}/{session_id}/{latest_file}"
-
-            # 发送图片链接（如果有）
-            if latest_image_url:
-                yield f"data: {json.dumps({'type': 'image', 'url': latest_image_url})}\n\n"
-
-            # 发送结束标记
-            yield "data: [DONE]\n\n"
-
-        return StreamingResponse(
-            event_stream(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-            }
+            save_message(
+                session_id=session_id,
+                user_id=user_id,
+                role="assistant",
+                content=build_render_completion_message(False, reply_text),
+            )
+    except Exception as exc:
+        logger.error("Background render job failed: %s", exc)
+        update_render_job(
+            job_id,
+            status="failed",
+            error_message="当前效果图服务繁忙，可稍后重新生成。",
+        )
+        save_message(
+            session_id=session_id,
+            user_id=user_id,
+            role="assistant",
+            content=build_render_completion_message(False),
         )
 
-    except Exception as e:
-        logger.error(f"Error during chat-with-image stream: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+
+def persist_chat_records(
+    *,
+    user_id: str,
+    session_id: str,
+    user_message: str,
+    assistant_message: str,
+    result_filename: Optional[str] = None,
+) -> None:
+    save_message(session_id=session_id, user_id=user_id, role="user", content=user_message)
+    save_message(
+        session_id=session_id,
+        user_id=user_id,
+        role="assistant",
+        content=assistant_message,
+        image_filename=result_filename,
+    )
 
 
-@app.post("/api/chat-with-image", response_model=ChatResponse)
-async def chat_with_image_endpoint(
-    message: str = Form(...),
-    image: UploadFile = File(None),
-    image_type: str = Form("current_room"), # "current_room" or "inspiration"
-    user_id: str = Form(DEFAULT_USER),
-    session_id: str = Form(DEFAULT_SESSION)
-):
-    """
-    Chat endpoint handling uploaded image files (non-streaming version).
-    """
-    if "GOOGLE_API_KEY" not in os.environ and "GEMINI_API_KEY" not in os.environ:
-        raise HTTPException(status_code=500, detail="Missing GOOGLE_API_KEY environment variable.")
+def iter_agent_updates(event: Any) -> list[dict[str, str]]:
+    updates: list[dict[str, str]] = []
+    author = getattr(event, "author", None)
+    actions = getattr(event, "actions", None)
 
-    try:
-        if image:
-            # Read image content
-            image_data = await image.read()
-            mime_type = image.content_type
+    if author in TRACKED_AGENTS:
+        updates.append({"agentName": author, "status": "processing"})
 
-            # Save the raw image as an artifact first (simulating what Visual Assessor might do)
-            artifact_name = f"{image_type}_{uuid.uuid4().hex[:8]}.{image.filename.split('.')[-1]}"
+        end_of_agent = getattr(actions, "end_of_agent", None) if actions else None
+        if end_of_agent or getattr(event, "is_final_response", lambda: False)():
+            updates.append({"agentName": author, "status": "completed"})
 
-            # ADK's storage logic expects artifacts in .adk/artifacts/<user>/<sess>/
-            user_sess_dir = os.path.join(ARTIFACTS_DIR, user_id, session_id)
-            os.makedirs(user_sess_dir, exist_ok=True)
+    transfer_to_agent = getattr(actions, "transfer_to_agent", None) if actions else None
+    if isinstance(transfer_to_agent, str) and transfer_to_agent in TRACKED_AGENTS:
+        updates.append({"agentName": transfer_to_agent, "status": "processing"})
 
-            file_path = os.path.join(user_sess_dir, artifact_name)
-            with open(file_path, "wb") as f:
-                f.write(image_data)
+    deduped: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for update in updates:
+        key = (update["agentName"], update["status"])
+        if key not in seen:
+            seen.add(key)
+            deduped.append(update)
+    return deduped
 
-            # Create a Google GenAI Part from bytes for the LLM request
-            from google.genai import types
-            image_part = types.Part.from_bytes(data=image_data, mime_type=mime_type)
-            text_part = types.Part.from_text(text=message)
-            message_content = types.Content(role="user", parts=[text_part, image_part])
 
-            # Now run the runner passing BOTH the text and the image part
-            events = runner.run_async(
-                user_id=user_id,
-                session_id=session_id,
-                new_message=message_content
-            )
+def extract_text_from_event(event: Any) -> str:
+    if not getattr(event, "content", None) or not event.content.parts:
+        return ""
+    return "".join(part.text for part in event.content.parts if getattr(part, "text", None))
 
-        else:
-            from google.genai import types
-            # Fallback to standard text run
-            message_content = types.Content(role="user", parts=[types.Part.from_text(text=message)])
-            events = runner.run_async(
-                user_id=user_id,
-                session_id=session_id,
-                new_message=message_content
-            )
 
-        reply_texts = []
-        async for event in events:
-            if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if part.text:
-                        reply_texts.append(part.text)
+@app.on_event("startup")
+async def startup_event():
+    global runner, render_runner, artifact_service
+    from google.adk.artifacts.file_artifact_service import FileArtifactService
+    from google.adk.runners import Runner
+    from google.adk.sessions.in_memory_session_service import InMemorySessionService
 
-        reply_text = "".join(reply_texts)
+    os.makedirs(ARTIFACT_ROOT, exist_ok=True)
+    init_db()
 
-        # After the run, let's find the latest visual artifact (rendering)
-        # The prompt usually generates a rendering as a file artifact
-        latest_image_url = None
-        user_sess_dir = os.path.join(ARTIFACTS_DIR, user_id, session_id)
-        if os.path.exists(user_sess_dir):
-            # Find the most recently modified file that isn't the input image
-            files = [os.path.join(user_sess_dir, f) for f in os.listdir(user_sess_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-            if files:
-                # Sort by creation time
-                files.sort(key=os.path.getmtime, reverse=True)
-                latest_file = os.path.basename(files[0])
-                latest_image_url = f"http://localhost:8000/artifacts/{user_id}/{session_id}/{latest_file}"
+    session_service = InMemorySessionService()
+    artifact_service = FileArtifactService(ARTIFACT_ROOT)
 
-        return ChatResponse(
-            message=reply_text,
-            imageUrl=latest_image_url
-        )
-
-    except Exception as e:
-        logger.error(f"Error during chat-with-image: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    runner = Runner(
+        agent=root_agent,
+        app_name=APP_NAME,
+        session_service=session_service,
+        artifact_service=artifact_service,
+        auto_create_session=True,
+    )
+    render_runner = Runner(
+        agent=project_coordinator,
+        app_name=APP_NAME,
+        session_service=session_service,
+        artifact_service=artifact_service,
+        auto_create_session=True,
+    )
+    logger.info("ADK Runner initialized and ready.")
 
 
 @app.get("/api/health")
@@ -363,6 +572,339 @@ async def health_check():
     return {"status": "ok", "api_key_configured": has_key}
 
 
+@app.post("/api/sessions")
+async def create_session(user_id: str = Form(DEFAULT_USER), session_id: str = Form(...)):
+    ensure_session(session_id=session_id, user_id=user_id, title="新对话")
+    await ensure_adk_session(user_id=user_id, session_id=session_id)
+    return {"session_id": session_id}
+
+
+@app.get("/api/sessions", response_model=list[SessionResponse])
+async def list_session_endpoint(user_id: str = DEFAULT_USER):
+    return list_sessions(user_id=user_id)
+
+
+@app.get("/api/sessions/{session_id}/messages", response_model=list[MessageResponse])
+async def get_session_messages(request: Request, session_id: str, user_id: str = DEFAULT_USER):
+    messages = get_messages(session_id=session_id, user_id=user_id)
+    return [
+        MessageResponse(
+            id=str(message["id"]),
+            role=message["role"],
+            content=message["content"],
+            imageUrl=build_asset_url(request, session_id, message["image_filename"], user_id)
+            if message["image_filename"]
+            else None,
+            created_at=message["created_at"],
+        )
+        for message in messages
+    ]
+
+
+@app.get("/api/render-jobs/{job_id}", response_model=RenderJobResponse)
+async def get_render_job_endpoint(request: Request, job_id: str, user_id: str = DEFAULT_USER):
+    job = get_render_job(job_id, user_id=user_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Render job not found.")
+    return RenderJobResponse(
+        job_id=job["job_id"],
+        status=job["status"],
+        imageUrl=build_asset_url(request, job["session_id"], job["result_filename"], user_id)
+        if job.get("result_filename")
+        else None,
+        message=job.get("error_message"),
+        retryable=job["status"] == "failed",
+    )
+
+
+@app.post("/api/sessions/{session_id}/render", response_model=RenderJobResponse)
+async def create_render_job_endpoint(
+    request: Request,
+    session_id: str,
+    user_id: str = Form(DEFAULT_USER),
+    request_message: str = Form("请根据刚才的设计方案生成效果图。"),
+):
+    ensure_session(session_id=session_id, user_id=user_id)
+    await ensure_adk_session(user_id=user_id, session_id=session_id)
+    job_id = await queue_render_job(
+        user_id=user_id,
+        session_id=session_id,
+        request_message=request_message,
+    )
+    return RenderJobResponse(job_id=job_id, status="pending")
+
+
+@app.get("/api/sessions/{session_id}/assets/{filename:path}", name="get_asset")
+async def get_asset(session_id: str, filename: str, user_id: str = DEFAULT_USER):
+    part = await artifact_service.load_artifact(
+        app_name=APP_NAME,
+        user_id=user_id,
+        session_id=session_id,
+        filename=filename,
+    )
+    if part is None or part.inline_data is None or not part.inline_data.data:
+        raise HTTPException(status_code=404, detail="Asset not found.")
+    return Response(
+        content=part.inline_data.data,
+        media_type=part.inline_data.mime_type or "application/octet-stream",
+    )
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat_endpoint(request: Request, payload: ChatRequest):
+    require_api_key()
+    ensure_session(session_id=payload.session_id, user_id=payload.user_id, title=payload.message[:80] or "新对话")
+    await ensure_adk_session(user_id=payload.user_id, session_id=payload.session_id)
+
+    try:
+        from google.genai import types
+
+        message_content = types.Content(role="user", parts=[types.Part.from_text(text=payload.message)])
+        events = runner.run_async(
+            user_id=payload.user_id,
+            session_id=payload.session_id,
+            new_message=message_content,
+        )
+        reply_text = await extract_reply_text(events)
+        result_filename = await get_result_image_filename(payload.user_id, payload.session_id)
+        persist_chat_records(
+            user_id=payload.user_id,
+            session_id=payload.session_id,
+            user_message=payload.message,
+            assistant_message=reply_text,
+            result_filename=result_filename,
+        )
+        return ChatResponse(
+            message=reply_text,
+            imageUrl=build_asset_url(request, payload.session_id, result_filename, payload.user_id)
+            if result_filename
+            else None,
+        )
+    except Exception as exc:
+        logger.error("Error during chat: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/chat/stream")
+async def chat_stream_endpoint(payload: ChatRequest):
+    require_api_key()
+    ensure_session(session_id=payload.session_id, user_id=payload.user_id, title=payload.message[:80] or "新对话")
+    await ensure_adk_session(user_id=payload.user_id, session_id=payload.session_id)
+
+    try:
+        from google.genai import types
+
+        message_content = types.Content(role="user", parts=[types.Part.from_text(text=payload.message)])
+        events = runner.run_async(
+            user_id=payload.user_id,
+            session_id=payload.session_id,
+            new_message=message_content,
+            run_config=RunConfig(streaming_mode=StreamingMode.SSE),
+        )
+
+        async def event_stream():
+            partial_reply_chunks: list[str] = []
+            final_reply_texts: list[str] = []
+            try:
+                async for event in events:
+                    for agent_update in iter_agent_updates(event):
+                        yield f"data: {json.dumps({'type': 'agent', **agent_update})}\n\n"
+
+                    text = extract_text_from_event(event)
+                    if not text:
+                        continue
+
+                    if getattr(event, "partial", False):
+                        partial_reply_chunks.append(text)
+                        async for chunk in stream_text_sse(normalize_assistant_output(text)):
+                            yield chunk
+                    else:
+                        final_reply_texts.append(text)
+                        if not partial_reply_chunks:
+                            async for chunk in stream_text_sse(normalize_assistant_output(text)):
+                                yield chunk
+            except Exception as exc:
+                logger.error("Error during chat stream iteration: %s", exc)
+                yield f"data: {json.dumps({'type': 'error', 'message': '当前网络或模型服务暂时不稳定，请稍后重试。'})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
+            assistant_message = normalize_assistant_output(
+                "".join(final_reply_texts) or "".join(partial_reply_chunks)
+            )
+
+            persist_chat_records(
+                user_id=payload.user_id,
+                session_id=payload.session_id,
+                user_message=payload.message,
+                assistant_message=assistant_message,
+                result_filename=await get_result_image_filename(payload.user_id, payload.session_id),
+            )
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+    except Exception as exc:
+        logger.error("Error during chat stream: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/chat-with-image", response_model=ChatResponse)
+async def chat_with_image_endpoint(
+    request: Request,
+    message: str = Form(...),
+    current_room_image: UploadFile | None = File(None),
+    inspiration_image: UploadFile | None = File(None),
+    image: UploadFile | None = File(None),
+    image_type: str = Form("current_room"),
+    user_id: str = Form(DEFAULT_USER),
+    session_id: str = Form(DEFAULT_SESSION),
+):
+    require_api_key()
+    ensure_session(session_id=session_id, user_id=user_id, title=message[:80] or "新对话")
+    await ensure_adk_session(user_id=user_id, session_id=session_id)
+
+    try:
+        message_content, _uploaded_assets = await prepare_message_content(
+            message=message,
+            user_id=user_id,
+            session_id=session_id,
+            current_room_image=current_room_image,
+            inspiration_image=inspiration_image,
+            image=image,
+            image_type=image_type,
+        )
+        events = runner.run_async(
+            user_id=user_id,
+            session_id=session_id,
+            new_message=message_content,
+        )
+        reply_text = await extract_reply_text(events)
+        result_filename = await get_result_image_filename(user_id, session_id)
+        persist_chat_records(
+            user_id=user_id,
+            session_id=session_id,
+            user_message=message,
+            assistant_message=reply_text,
+            result_filename=result_filename,
+        )
+        return ChatResponse(
+            message=reply_text,
+            imageUrl=build_asset_url(request, session_id, result_filename, user_id)
+            if result_filename
+            else None,
+        )
+    except Exception as exc:
+        logger.error("Error during chat-with-image: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/chat-with-image/stream")
+async def chat_with_image_stream_endpoint(
+    request: Request,
+    message: str = Form(...),
+    current_room_image: UploadFile | None = File(None),
+    inspiration_image: UploadFile | None = File(None),
+    image: UploadFile | None = File(None),
+    image_type: str = Form("current_room"),
+    user_id: str = Form(DEFAULT_USER),
+    session_id: str = Form(DEFAULT_SESSION),
+):
+    require_api_key()
+    ensure_session(session_id=session_id, user_id=user_id, title=message[:80] or "新对话")
+    await ensure_adk_session(user_id=user_id, session_id=session_id)
+
+    try:
+        message_content, _uploaded_assets = await prepare_message_content(
+            message=message,
+            user_id=user_id,
+            session_id=session_id,
+            current_room_image=current_room_image,
+            inspiration_image=inspiration_image,
+            image=image,
+            image_type=image_type,
+        )
+        events = runner.run_async(
+            user_id=user_id,
+            session_id=session_id,
+            new_message=message_content,
+            run_config=RunConfig(streaming_mode=StreamingMode.SSE),
+        )
+
+        async def event_stream():
+            partial_reply_chunks: list[str] = []
+            final_reply_texts: list[str] = []
+            try:
+                async for event in events:
+                    for agent_update in iter_agent_updates(event):
+                        yield f"data: {json.dumps({'type': 'agent', **agent_update})}\n\n"
+
+                    text = extract_text_from_event(event)
+                    if not text:
+                        continue
+
+                    if getattr(event, "partial", False):
+                        partial_reply_chunks.append(text)
+                        async for chunk in stream_text_sse(normalize_assistant_output(text)):
+                            yield chunk
+                    else:
+                        final_reply_texts.append(text)
+                        if not partial_reply_chunks:
+                            async for chunk in stream_text_sse(normalize_assistant_output(text)):
+                                yield chunk
+            except Exception as exc:
+                logger.error("Error during chat-with-image stream iteration: %s", exc)
+                yield f"data: {json.dumps({'type': 'error', 'message': '当前网络或模型服务暂时不稳定，请稍后重试。'})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
+            assistant_message = normalize_assistant_output(
+                "".join(final_reply_texts) or "".join(partial_reply_chunks)
+            )
+
+            persist_chat_records(
+                user_id=user_id,
+                session_id=session_id,
+                user_message=message,
+                assistant_message=assistant_message,
+                result_filename=None,
+            )
+            if current_room_image or inspiration_image or image:
+                job_id = await queue_render_job(
+                    user_id=user_id,
+                    session_id=session_id,
+                    request_message=message,
+                )
+                yield f"data: {json.dumps({'type': 'render', 'jobId': job_id, 'status': 'pending'})}\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+    except Exception as exc:
+        logger.error("Error during chat-with-image stream: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(_: Request, exc: HTTPException):
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)

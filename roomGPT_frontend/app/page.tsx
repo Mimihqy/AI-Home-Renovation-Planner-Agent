@@ -56,9 +56,9 @@ const pairedSlides: PairedSlide[] = [
 
 const introCards = [
   {
-    title: "项目初衷",
+    title: "为什么做这个",
     content:
-      "把装修灵感从'想象'变成'可视化决策'。通过上传真实房间照片，快速看到改造方向，减少试错成本。",
+      "装修前最难的是提前看见结果，也很难把模糊想法讲清楚。这个项目希望把灵感更早变成可以讨论的可视化方案。",
     icon: (
       <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="10" strokeWidth="2" />
@@ -68,9 +68,9 @@ const introCards = [
     ),
   },
   {
-    title: "如何驱动",
+    title: "它如何工作",
     content:
-      "系统采用多智能体协作：视觉评估理解现状，设计规划输出方案，项目协调整合成可执行建议与效果图。",
+      "上传当前房间图和灵感图后，多个 Agent 会分工完成空间分析、方案规划和结果汇总，而不是只返回一句泛泛建议。",
     icon: (
       <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -78,14 +78,38 @@ const introCards = [
     ),
   },
   {
-    title: "你能获得什么",
+    title: "你最终会得到什么",
     content:
-      "不仅有对比效果图，还能获得更清晰的改造路径、风格选择依据，以及面向实际落地的装修思路。",
+      "你会拿到效果图、设计建议、风格方向和下一步行动思路，让装修讨论更具体，也更容易推进落地。",
     icon: (
       <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
+  },
+];
+
+const agentShowcase = [
+  {
+    name: "视觉评估师",
+    title: "读取空间现状",
+    description: "识别房间布局、采光、问题点与可保留结构，也能吸收灵感图里的风格语言。",
+    icon: "🔍",
+    accent: "from-[#F1D9B1] to-[#F7EEE0]",
+  },
+  {
+    name: "设计规划师",
+    title: "生成风格方案",
+    description: "把预算、材料、配色和功能诉求整理成清晰可执行的设计方案，而不是一句模糊建议。",
+    icon: "📋",
+    accent: "from-[#DCE9DB] to-[#F0F7EF]",
+  },
+  {
+    name: "项目协调员",
+    title: "汇总并出效果图",
+    description: "整合前两位智能体的结果，输出装修路线、行动建议，并生成最终的改造效果图。",
+    icon: "⚙️",
+    accent: "from-[#E6D8C5] to-[#F7F1E7]",
   },
 ];
 
@@ -146,6 +170,64 @@ export default function HomePage() {
         </motion.div>
 
         <motion.section
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.75, delay: 0.22 }}
+          className="mt-8 w-full max-w-6xl"
+        >
+          <div className="rounded-[28px] border border-[#8B6F47]/12 bg-white/70 px-5 py-5 shadow-[0_18px_60px_rgba(139,111,71,0.08)] backdrop-blur-md sm:px-7 sm:py-6">
+            <div className="grid gap-5 text-left lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.9fr)] lg:items-start lg:gap-8">
+              <div className="max-w-3xl">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#A28962]">
+                  Multi-Agent Workflow
+                </p>
+                <h3 className="cn-latin-heading mt-3 max-w-2xl text-[2rem] font-semibold leading-[1.16] tracking-[-0.02em] text-[#2D2D2D] sm:text-[2.55rem]">
+                  从房间分析到效果图生成，3 个 Agent 各司其职
+                </h3>
+              </div>
+              <div className="max-w-lg lg:pt-8">
+                <p className="cn-latin-copy text-base leading-8 text-[#6B6459] sm:text-[1.05rem]">
+                  从看懂你的房间，到生成方案，再到输出效果图，整个过程由分工明确的智能体协作完成。
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              {agentShowcase.map((agent, index) => (
+                <motion.article
+                  key={agent.name}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.28 + index * 0.08 }}
+                  className="relative overflow-hidden rounded-3xl border border-[#8B6F47]/10 bg-white p-5 text-left shadow-sm"
+                >
+                  <div className={`absolute inset-x-0 top-0 h-24 bg-gradient-to-br ${agent.accent} opacity-90`} />
+                  <div className="relative">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-xl shadow-sm">
+                          {agent.icon}
+                        </div>
+                        <p className="cn-latin-heading text-[1.22rem] font-bold leading-none text-[#6E532F] sm:text-[1.28rem]">
+                          {agent.name}
+                        </p>
+                      </div>
+                      <span className="agent-index-label text-[11px] font-semibold uppercase text-[#8D724E]">
+                        Agent 0{index + 1}
+                      </span>
+                    </div>
+                    <h4 className="cn-latin-heading mt-10 text-[1.58rem] font-semibold leading-[1.18] tracking-[-0.01em] text-[#2D2D2D] sm:text-[1.68rem]">
+                      {agent.title}
+                    </h4>
+                    <p className="cn-latin-copy mt-3 text-[15px] leading-8 text-[#5A5A5A]">{agent.description}</p>
+                  </div>
+                </motion.article>
+              ))}
+            </div>
+          </div>
+        </motion.section>
+
+        <motion.section
           initial={{ opacity: 0, y: 26 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.75, delay: 0.24 }}
@@ -163,7 +245,7 @@ export default function HomePage() {
               transition={{ duration: 0.55 }}
               className="text-center text-2xl font-semibold text-[#2D2D2D] sm:text-3xl"
             >
-              关于这个项目
+              这个项目能帮你什么
             </motion.h3>
             <motion.p
               initial={{ opacity: 0, y: 16 }}
@@ -172,7 +254,7 @@ export default function HomePage() {
               transition={{ duration: 0.55, delay: 0.08 }}
               className="mx-auto mt-4 max-w-3xl text-center text-base leading-7 text-[#5A5A5A] sm:text-lg"
             >
-              我们希望让装修沟通变得看得见、说得清、能落地，让每个家都有温度。
+              它想解决的是装修前“看不见、说不清、难落地”的问题，把灵感更早变成可以讨论的方案。
             </motion.p>
 
             <div className="mt-7 grid grid-cols-1 gap-5 sm:mt-10 md:grid-cols-3">
