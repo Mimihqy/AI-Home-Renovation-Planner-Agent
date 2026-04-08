@@ -37,15 +37,15 @@ export default function ChatMessageActions({ content, onCopy, onRegenerate }: Ch
   };
 
   return (
-    <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+    <div className="mt-2 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
       <motion.button
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         onClick={handleCopy}
-        className="p-1.5 rounded-lg bg-white/70 hover:bg-white border border-[#8B6F47]/20 transition"
+        className="rounded-lg border border-[rgba(93,74,50,0.2)] bg-[rgba(255,252,247,0.78)] p-1.5 transition hover:bg-[rgba(255,252,247,0.95)]"
         title="复制"
       >
-        <svg className={`w-4 h-4 ${copied ? 'text-[#7A9E7E]' : 'text-[#8A8A8A]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className={`w-4 h-4 ${copied ? 'text-[#5b7f63]' : 'text-[#8A8A8A]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           {copied ? (
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           ) : (
@@ -59,7 +59,7 @@ export default function ChatMessageActions({ content, onCopy, onRegenerate }: Ch
         whileTap={{ scale: 0.95 }}
         onClick={handleLike}
         className={`p-1.5 rounded-lg border transition ${
-          liked ? 'bg-[#7A9E7E]/20 border-[#7A9E7E]/30' : 'bg-white/70 hover:bg-white border-[#8B6F47]/20'
+          liked ? 'bg-[#7A9E7E]/20 border-[#7A9E7E]/30' : 'bg-[rgba(255,252,247,0.78)] hover:bg-[rgba(255,252,247,0.95)] border-[rgba(93,74,50,0.2)]'
         }`}
         title="点赞"
       >
@@ -73,7 +73,7 @@ export default function ChatMessageActions({ content, onCopy, onRegenerate }: Ch
         whileTap={{ scale: 0.95 }}
         onClick={handleDislike}
         className={`p-1.5 rounded-lg border transition ${
-          disliked ? 'bg-[#8B6F47]/20 border-[#8B6F47]/30' : 'bg-white/70 hover:bg-white border-[#8B6F47]/20'
+          disliked ? 'bg-[#8B6F47]/20 border-[#8B6F47]/30' : 'bg-[rgba(255,252,247,0.78)] hover:bg-[rgba(255,252,247,0.95)] border-[rgba(93,74,50,0.2)]'
         }`}
         title="反馈"
       >
@@ -87,7 +87,7 @@ export default function ChatMessageActions({ content, onCopy, onRegenerate }: Ch
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
           onClick={onRegenerate}
-          className="p-1.5 rounded-lg bg-white/70 hover:bg-white border border-[#8B6F47]/20 transition"
+          className="rounded-lg border border-[rgba(93,74,50,0.2)] bg-[rgba(255,252,247,0.78)] p-1.5 transition hover:bg-[rgba(255,252,247,0.95)]"
           title="重新生成"
         >
           <svg className="w-4 h-4 text-[#8A8A8A] hover:text-[#5A5A5A] transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">

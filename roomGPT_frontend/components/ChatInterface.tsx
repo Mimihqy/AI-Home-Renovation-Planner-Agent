@@ -591,7 +591,7 @@ export default function ChatInterface({ sessionId, onError }: ChatInterfaceProps
   };
 
   return (
-    <div className="flex flex-col h-full font-body">
+    <div className="flex h-full flex-col font-body">
       {/* 顶部操作栏 */}
       <div className="flex-shrink-0 px-4 pt-0">
         <ChatActions
@@ -603,12 +603,12 @@ export default function ChatInterface({ sessionId, onError }: ChatInterfaceProps
       </div>
 
       {/* 聊天消息区域 */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
         {messages.length === 0 && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-12">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="py-12 text-center">
             <h3 className="font-display text-2xl font-semibold text-accent mb-2">开始您的装修咨询</h3>
             <p className="text-text-secondary">上传当前房间图，或直接描述您的装修需求。</p>
-            <div className="mx-auto mt-6 w-full max-w-[500px] rounded-2xl border border-secondary/30 bg-primary p-6 text-left">
+            <div className="mx-auto mt-6 w-full max-w-[500px] rounded-2xl border border-[rgba(93,74,50,0.18)] bg-[rgba(255,251,244,0.78)] p-6 text-left">
               <p className="text-sm font-semibold text-accent mb-3">猜你想问</p>
               <div className="flex flex-wrap gap-2">
                 {(recommendedPrompts.length ? recommendedPrompts : generateFollowUpPrompts("")).slice(0, 3).map((prompt) => (
@@ -1018,13 +1018,13 @@ export default function ChatInterface({ sessionId, onError }: ChatInterfaceProps
 
       {/* 底部输入区域 */}
       <div className="px-4 pb-4 pt-0">
-        <div className="rounded-[24px] border border-[#8B6F47]/12 bg-white/90 px-3 py-2.5 shadow-[0_10px_26px_rgba(139,111,71,0.08)] backdrop-blur-md">
+        <div className="rounded-[24px] border border-[rgba(93,74,50,0.18)] bg-[rgba(255,251,244,0.9)] px-3 py-2.5 shadow-soft-lg backdrop-blur-md">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyPress}
             placeholder="发消息，描述你的装修需求..."
-            className="h-6 w-full border-0 bg-transparent px-2 py-0 text-[15px] leading-6 text-[#2D2D2D] outline-none ring-0 ring-transparent shadow-none focus:border-0 focus:outline-none focus:ring-0 focus:ring-transparent focus:shadow-none focus-visible:outline-none focus-visible:ring-0 placeholder:text-[#A0978B]"
+            className="h-6 w-full border-0 bg-transparent px-2 py-0 text-[15px] leading-6 text-accent outline-none ring-0 ring-transparent shadow-none focus:border-0 focus:outline-none focus:ring-0 focus:ring-transparent focus:shadow-none focus-visible:outline-none focus-visible:ring-0 placeholder:text-text-secondary"
             disabled={isSending}
           />
 
@@ -1052,13 +1052,13 @@ export default function ChatInterface({ sessionId, onError }: ChatInterfaceProps
             disabled={isSending}
           />
 
-          <div className="mt-1.5 flex items-center justify-between gap-3 border-t border-[#8B6F47]/8 px-1 pt-2.5">
+          <div className="mt-1.5 flex items-center justify-between gap-3 border-t border-[rgba(93,74,50,0.12)] px-1 pt-2.5">
             <div className="flex flex-wrap items-center gap-1">
               <button
                 type="button"
                 onClick={() => triggerFilePicker("general")}
                 disabled={isSending}
-                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-medium text-[#4B6785] transition hover:bg-[#EDF3FB] disabled:opacity-60"
+                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-medium text-[#4B6785] transition hover:bg-[#E8F0FA] disabled:opacity-60"
               >
                 <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 01-7.78-7.78l9.2-9.19a3.5 3.5 0 114.95 4.95l-9.19 9.2a1.5 1.5 0 01-2.12-2.13l8.49-8.48" />
@@ -1069,7 +1069,7 @@ export default function ChatInterface({ sessionId, onError }: ChatInterfaceProps
                 type="button"
                 onClick={() => triggerFilePicker("vision_match")}
                 disabled={isSending}
-                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-medium text-[#4C7560] transition hover:bg-[#EEF5F0] disabled:opacity-60"
+                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-medium text-[#4C7560] transition hover:bg-[#E8F0EA] disabled:opacity-60"
               >
                 <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="11" cy="11" r="7" />
@@ -1083,8 +1083,8 @@ export default function ChatInterface({ sessionId, onError }: ChatInterfaceProps
                 disabled={isSending}
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-medium transition disabled:opacity-60 ${
                   showInspirationComposer
-                    ? "bg-[#8B6F47] text-white shadow-md"
-                    : "text-[#8B6F47] hover:bg-[#F7F1E7]"
+                    ? "bg-[linear-gradient(135deg,#2f261f_0%,#6d5232_100%)] text-white shadow-md"
+                    : "text-[#7d5f3c] hover:bg-[#F7F1E7]"
                 }`}
               >
                 <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1100,7 +1100,7 @@ export default function ChatInterface({ sessionId, onError }: ChatInterfaceProps
                 disabled={isSending}
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-medium transition disabled:opacity-60 ${
                   showQuickScenes
-                    ? "bg-[#7A9E7E] text-white shadow-md"
+                    ? "bg-[#5C7B60] text-white shadow-md"
                     : "text-[#5C7B60] hover:bg-[#EEF5EF]"
                 }`}
               >
@@ -1122,7 +1122,7 @@ export default function ChatInterface({ sessionId, onError }: ChatInterfaceProps
               className={`group relative inline-flex h-10 w-10 shrink-0 items-center justify-center self-end overflow-hidden rounded-full border transition-all duration-300 ${
                 isSending || (!input.trim() && !pendingImages.length)
                   ? "border-[#E6DED2] bg-[#F4EFE8] text-[#B3A797] cursor-not-allowed"
-                  : "border-[#B79662]/30 bg-[linear-gradient(135deg,#8B6F47_0%,#A68B5B_55%,#C8A56D_100%)] text-white shadow-[0_10px_24px_rgba(139,111,71,0.24)] hover:border-[#C8A56D]/40 hover:shadow-[0_14px_30px_rgba(139,111,71,0.30)]"
+                  : "border-[rgba(140,106,65,0.36)] bg-[linear-gradient(135deg,#2f261f_0%,#6d5232_68%,#9c7342_100%)] text-white shadow-[0_10px_24px_rgba(48,38,29,0.28)] hover:border-[rgba(140,106,65,0.5)] hover:shadow-[0_14px_30px_rgba(48,38,29,0.34)]"
               }`}
             >
               {!isSending && (input.trim() || pendingImages.length > 0) && (

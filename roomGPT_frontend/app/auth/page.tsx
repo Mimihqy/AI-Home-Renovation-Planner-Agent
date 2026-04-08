@@ -317,9 +317,9 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-primary">
+    <div className="min-h-screen grid lg:grid-cols-2 bg-[linear-gradient(150deg,#f9f4eb_0%,#ede2d0_58%,#eadcca_100%)]">
       {/* 左侧：可爱的眼睛动画 */}
-      <div className="relative hidden lg:flex flex-col justify-between bg-gradient-to-br from-surface-2 via-primary to-white p-12 text-accent overflow-hidden">
+      <div className="relative hidden lg:flex flex-col justify-between overflow-hidden border-r border-[rgba(67,63,57,0.22)] bg-gradient-to-br from-[rgba(245,236,222,0.98)] via-[rgba(255,247,236,0.92)] to-[rgba(255,252,245,0.9)] p-12 text-accent">
         <div className="relative z-20" />
 
         <div className="relative z-20 flex items-end justify-center h-[500px]">
@@ -331,7 +331,7 @@ export default function AuthPage() {
                 left: "70px",
                 width: "180px",
                 height: isTyping || (password.length > 0 && !showPassword) ? "440px" : "400px",
-                backgroundColor: "#eebf43",
+                backgroundColor: "#6a45f5",
                 borderRadius: "10px 10px 0 0",
                 zIndex: 1,
                 transform:
@@ -365,7 +365,7 @@ export default function AuthPage() {
                   pupilSize={7}
                   maxDistance={5}
                   eyeColor="white"
-                  pupilColor="#4e3c30"
+                  pupilColor="#2f3035"
                   isBlinking={isPurpleBlinking}
                   forceLookX={
                     password.length > 0 && showPassword
@@ -391,7 +391,7 @@ export default function AuthPage() {
                   pupilSize={7}
                   maxDistance={5}
                   eyeColor="white"
-                  pupilColor="#4e3c30"
+                  pupilColor="#2f3035"
                   isBlinking={isPurpleBlinking}
                   forceLookX={
                     password.length > 0 && showPassword
@@ -422,7 +422,7 @@ export default function AuthPage() {
                 left: "240px",
                 width: "120px",
                 height: "310px",
-                backgroundColor: "#4e3c30",
+                backgroundColor: "#2f3035",
                 borderRadius: "8px 8px 0 0",
                 zIndex: 2,
                 transform:
@@ -458,7 +458,7 @@ export default function AuthPage() {
                   pupilSize={6}
                   maxDistance={4}
                   eyeColor="white"
-                  pupilColor="#4e3c30"
+                  pupilColor="#2f3035"
                   isBlinking={isBlackBlinking}
                   forceLookX={password.length > 0 && showPassword ? -4 : isLookingAtEachOther ? 0 : undefined}
                   forceLookY={password.length > 0 && showPassword ? -4 : isLookingAtEachOther ? -4 : undefined}
@@ -468,7 +468,7 @@ export default function AuthPage() {
                   pupilSize={6}
                   maxDistance={4}
                   eyeColor="white"
-                  pupilColor="#4e3c30"
+                  pupilColor="#2f3035"
                   isBlinking={isBlackBlinking}
                   forceLookX={password.length > 0 && showPassword ? -4 : isLookingAtEachOther ? 0 : undefined}
                   forceLookY={password.length > 0 && showPassword ? -4 : isLookingAtEachOther ? -4 : undefined}
@@ -484,7 +484,7 @@ export default function AuthPage() {
                 width: "240px",
                 height: "200px",
                 zIndex: 3,
-                backgroundColor: "#C54F2D",
+                backgroundColor: "#f49467",
                 borderRadius: "120px 120px 0 0",
                 transform: password.length > 0 && showPassword ? "skewX(0deg)" : `skewX(${orangePos.bodySkew || 0}deg)`,
                 transformOrigin: "bottom center",
@@ -497,8 +497,8 @@ export default function AuthPage() {
                   top: password.length > 0 && showPassword ? "85px" : `${90 + (orangePos.faceY || 0)}px`,
                 }}
               >
-                <Pupil size={12} maxDistance={5} pupilColor="#4e3c30" forceLookX={password.length > 0 && showPassword ? -5 : undefined} forceLookY={password.length > 0 && showPassword ? -4 : undefined} />
-                <Pupil size={12} maxDistance={5} pupilColor="#4e3c30" forceLookX={password.length > 0 && showPassword ? -5 : undefined} forceLookY={password.length > 0 && showPassword ? -4 : undefined} />
+                <Pupil size={12} maxDistance={5} pupilColor="#2f3035" forceLookX={password.length > 0 && showPassword ? -5 : undefined} forceLookY={password.length > 0 && showPassword ? -4 : undefined} />
+                <Pupil size={12} maxDistance={5} pupilColor="#2f3035" forceLookX={password.length > 0 && showPassword ? -5 : undefined} forceLookY={password.length > 0 && showPassword ? -4 : undefined} />
               </div>
             </div>
 
@@ -510,7 +510,7 @@ export default function AuthPage() {
                 width: "140px",
                 height: "230px",
                 zIndex: 4,
-                backgroundColor: "#F2E7CB",
+                backgroundColor: "#ddd255",
                 borderRadius: "70px 70px 0 0",
                 transform: password.length > 0 && showPassword ? "skewX(0deg)" : `skewX(${yellowPos.bodySkew || 0}deg)`,
                 transformOrigin: "bottom center",
@@ -523,11 +523,11 @@ export default function AuthPage() {
                   top: password.length > 0 && showPassword ? "35px" : `${40 + (yellowPos.faceY || 0)}px`,
                 }}
               >
-                <Pupil size={12} maxDistance={5} pupilColor="#4e3c30" forceLookX={password.length > 0 && showPassword ? -5 : undefined} forceLookY={password.length > 0 && showPassword ? -4 : undefined} />
-                <Pupil size={12} maxDistance={5} pupilColor="#4e3c30" forceLookX={password.length > 0 && showPassword ? -5 : undefined} forceLookY={password.length > 0 && showPassword ? -4 : undefined} />
+                <Pupil size={12} maxDistance={5} pupilColor="#2f3035" forceLookX={password.length > 0 && showPassword ? -5 : undefined} forceLookY={password.length > 0 && showPassword ? -4 : undefined} />
+                <Pupil size={12} maxDistance={5} pupilColor="#2f3035" forceLookX={password.length > 0 && showPassword ? -5 : undefined} forceLookY={password.length > 0 && showPassword ? -4 : undefined} />
               </div>
               <div
-                className="absolute w-20 h-[4px] bg-[#4e3c30] rounded-full transition-all duration-200 ease-out"
+                className="absolute w-20 h-[4px] bg-[#2f3035] rounded-full transition-all duration-200 ease-out"
                 style={{
                   left: password.length > 0 && showPassword ? "10px" : `${40 + (yellowPos.faceX || 0)}px`,
                   top: password.length > 0 && showPassword ? "88px" : `${88 + (yellowPos.faceY || 0)}px`,
@@ -537,21 +537,21 @@ export default function AuthPage() {
           </div>
         </div>
 
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.45),transparent_45%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_18%,rgba(255,214,136,0.18),transparent_44%),radial-gradient(circle_at_78%_86%,rgba(205,144,166,0.12),transparent_42%)]" />
       </div>
 
       {/* 右侧：登录表单 */}
-      <div className="relative flex items-center justify-center p-8 bg-white">
-        <Link href="/" className="absolute top-6 right-6 text-sm font-medium text-accent hover:underline transition-colors">
+      <div className="relative flex items-center justify-center bg-[rgba(255,250,243,0.72)] p-8">
+        <Link href="/" className="absolute top-6 right-6 rounded-full border border-[rgba(93,74,50,0.2)] bg-[rgba(255,251,244,0.72)] px-4 py-1.5 text-sm font-medium text-accent transition-all hover:-translate-y-0.5 hover:bg-[rgba(255,251,244,0.95)]">
           返回首页
         </Link>
-        <div className="w-full max-w-[420px]">
+        <div className="w-full max-w-[420px] rounded-[1.75rem] border border-[rgba(93,74,50,0.2)] bg-[rgba(255,251,244,0.9)] p-7 shadow-soft-lg backdrop-blur">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold tracking-tight mb-2 text-accent">欢迎回来</h1>
+            <h1 className="font-display text-4xl font-semibold tracking-tight mb-2 text-accent">欢迎回来</h1>
             <p className="text-text-secondary text-sm">登录后即可开始你的理想空间设计</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 mb-6 bg-primary p-1 rounded-xl border border-secondary/30">
+          <div className="grid grid-cols-2 gap-2 mb-6 rounded-xl border border-[rgba(93,74,50,0.2)] bg-[rgba(255,248,239,0.76)] p-1">
             <button
               type="button"
               onClick={() => {
@@ -559,7 +559,7 @@ export default function AuthPage() {
                 resetMessage();
               }}
               className={`h-11 rounded-lg text-sm font-medium transition-all duration-300 ${
-                mode === "login" ? "bg-accent text-primary shadow-sm" : "text-text-secondary hover:text-accent hover:bg-white"
+                mode === "login" ? "bg-[linear-gradient(135deg,#2f261f_0%,#6d5232_100%)] text-white shadow-sm" : "text-text-secondary hover:text-accent hover:bg-[rgba(255,251,244,0.95)]"
               }`}
             >
               登录
@@ -571,7 +571,7 @@ export default function AuthPage() {
                 resetMessage();
               }}
               className={`h-11 rounded-lg text-sm font-medium transition-all duration-300 ${
-                mode === "register" ? "bg-accent text-primary shadow-sm" : "text-text-secondary hover:text-accent hover:bg-white"
+                mode === "register" ? "bg-[linear-gradient(135deg,#2f261f_0%,#6d5232_100%)] text-white shadow-sm" : "text-text-secondary hover:text-accent hover:bg-[rgba(255,251,244,0.95)]"
               }`}
             >
               注册
@@ -593,7 +593,7 @@ export default function AuthPage() {
                   onFocus={() => setIsTyping(true)}
                   onBlur={() => setIsTyping(false)}
                   required
-                  className="w-full h-11 px-3 rounded-lg border border-secondary/40 bg-white text-accent placeholder:text-text-secondary outline-none focus:ring-2 focus:ring-accent/20 transition-all duration-200"
+                  className="w-full h-11 px-3 rounded-lg border border-[rgba(93,74,50,0.28)] bg-[rgba(255,255,255,0.72)] text-accent placeholder:text-text-secondary outline-none focus:ring-2 focus:ring-[rgba(175,135,80,0.24)] transition-all duration-200"
                 />
               </div>
             )}
@@ -611,7 +611,7 @@ export default function AuthPage() {
                 onFocus={() => setIsTyping(true)}
                 onBlur={() => setIsTyping(false)}
                 required
-                className="w-full h-11 px-3 rounded-lg border border-secondary/40 bg-white text-accent placeholder:text-text-secondary outline-none focus:ring-2 focus:ring-accent/20 transition-all duration-200"
+                className="w-full h-11 px-3 rounded-lg border border-[rgba(93,74,50,0.28)] bg-[rgba(255,255,255,0.72)] text-accent placeholder:text-text-secondary outline-none focus:ring-2 focus:ring-[rgba(175,135,80,0.24)] transition-all duration-200"
               />
             </div>
 
@@ -629,7 +629,7 @@ export default function AuthPage() {
                   onFocus={() => setIsTyping(true)}
                   onBlur={() => setIsTyping(false)}
                   required
-                  className="w-full h-11 px-3 pr-12 rounded-lg border border-secondary/40 bg-white text-accent placeholder:text-text-secondary outline-none focus:ring-2 focus:ring-accent/20 transition-all duration-200"
+                  className="w-full h-11 px-3 pr-12 rounded-lg border border-[rgba(93,74,50,0.28)] bg-[rgba(255,255,255,0.72)] text-accent placeholder:text-text-secondary outline-none focus:ring-2 focus:ring-[rgba(175,135,80,0.24)] transition-all duration-200"
                 />
                 <button
                   type="button"
@@ -654,7 +654,7 @@ export default function AuthPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full h-11 rounded-lg bg-accent text-primary font-medium hover:bg-accent-dark transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed shadow-sm"
+              className="w-full h-11 rounded-lg border border-[rgba(140,106,65,0.34)] bg-[linear-gradient(135deg,#2f261f_0%,#6d5232_100%)] text-white font-medium transition-all duration-200 hover:-translate-y-0.5 hover:shadow-soft disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {isLoading ? "处理中..." : mode === "login" ? "登录" : "注册"}
             </button>

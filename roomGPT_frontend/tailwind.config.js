@@ -8,34 +8,34 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        display: ['"Playfair Display"', '"Noto Sans SC"', 'serif'],
-        body: ['"Outfit"', '"Noto Sans SC"', 'system-ui', 'sans-serif'],
+        display: ['"Cormorant Garamond"', '"Noto Sans SC"', 'serif'],
+        body: ['"Manrope"', '"Noto Sans SC"', 'system-ui', 'sans-serif'],
       },
       colors: {
         primary: {
-          DEFAULT: '#fcf9f8', // 奶油色 - 页面背景
+          DEFAULT: 'var(--color-primary)',
         },
         secondary: {
-          DEFAULT: '#bdb3a5', // 莫兰迪棕 - 卡片/边框/中性文本
+          DEFAULT: 'var(--color-secondary)',
         },
         accent: {
-          DEFAULT: '#4e3c30', // 深巧克力棕 - 导航栏/按钮/标题
-          dark: '#3d2f26',
+          DEFAULT: 'var(--color-accent)',
+          dark: 'var(--color-accent-dark)',
         },
         text: {
-          primary: '#4e3c30', // 深色调 - 主体文本
-          secondary: '#9f8370', // 辅助文本
-          tertiary: '#bdb3a5',
+          primary: 'var(--text-primary)',
+          secondary: 'var(--text-secondary)',
+          tertiary: 'var(--text-tertiary)',
         },
         surface: {
-          1: '#fcf9f8',
-          2: '#f7f3f0',
-          3: '#f2ebe7',
+          1: 'var(--surface-1)',
+          2: 'var(--surface-2)',
+          3: 'var(--surface-3)',
         },
         border: {
-          subtle: '#e8e4df',
-          DEFAULT: '#d4cec5',
-          strong: '#bdb3a5',
+          subtle: 'var(--border-subtle)',
+          DEFAULT: 'var(--border-default)',
+          strong: 'var(--border-strong)',
         },
       },
       borderRadius: {
@@ -43,9 +43,9 @@ module.exports = {
         '5xl': '2.5rem',
       },
       boxShadow: {
-        'soft': '0 4px 12px rgba(78, 60, 48, 0.08)',
-        'soft-lg': '0 8px 24px rgba(78, 60, 48, 0.12)',
-        'soft-xl': '0 16px 40px rgba(78, 60, 48, 0.16)',
+        soft: 'var(--shadow-sm)',
+        'soft-lg': 'var(--shadow-lg)',
+        'soft-xl': 'var(--shadow-xl)',
       },
       screens: {
         xs: '330px',

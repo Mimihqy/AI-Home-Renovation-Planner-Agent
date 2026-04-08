@@ -50,16 +50,20 @@ export default function AgentStatus({
 
   if (compact) {
     return (
-      <div className="mb-3 rounded-2xl border border-[#8B6F47]/15 bg-[#FBF8F2] px-3 py-3">
+      <div className="mb-3 rounded-2xl border border-[rgba(93,74,50,0.18)] bg-[rgba(255,250,243,0.78)] px-3 py-3 backdrop-blur">
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-sm">🤖</span>
-            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8B6F47]">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[rgba(93,74,50,0.24)]">
+              <svg className="h-3.5 w-3.5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M9 7h6m-9 4h12m-9 4h6M8 3h8l1 3H7l1-3zM6 6h12a2 2 0 012 2v9a3 3 0 01-3 3H7a3 3 0 01-3-3V8a2 2 0 012-2z" />
+              </svg>
+            </span>
+            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7e603e]">
               {title}
             </span>
           </div>
           {processingCount > 0 && (
-            <span className="rounded-full bg-[#8B6F47] px-2 py-0.5 text-[10px] text-white">
+            <span className="rounded-full bg-[linear-gradient(135deg,#2f261f_0%,#6e5232_100%)] px-2 py-0.5 text-[10px] text-white">
               {processingCount} 个进行中
             </span>
           )}
@@ -70,12 +74,12 @@ export default function AgentStatus({
               key={agent.agentName}
               className={`rounded-xl border px-3 py-2 transition ${
                 agent.status === "processing"
-                  ? "border-[#8B6F47]/35 bg-white shadow-sm"
+                  ? "border-[rgba(93,74,50,0.34)] bg-[rgba(255,252,247,0.95)] shadow-sm"
                   : agent.status === "completed"
                   ? "border-[#7A9E7E]/25 bg-[#F8FCF8]"
                   : agent.status === "error"
                   ? "border-red-300 bg-red-50"
-                  : "border-[#E6DDD0] bg-white/75"
+                  : "border-[rgba(93,74,50,0.14)] bg-[rgba(255,251,244,0.72)]"
               }`}
             >
               <div className="flex items-center gap-2">
@@ -87,16 +91,16 @@ export default function AgentStatus({
               <div className="mt-2 flex items-center justify-between gap-2">
                 <span className={`text-[11px] ${
                   agent.status === "processing"
-                    ? "text-[#8B6F47]"
+                  ? "text-[#7d5f3c]"
                     : agent.status === "completed"
                     ? "text-[#5B8A72]"
                     : agent.status === "error"
                     ? "text-red-600"
-                    : "text-[#8A8A8A]"
+                    : "text-text-secondary"
                 }`}>
                   {getStatusText(agent.status)}
                 </span>
-                <div className="h-1.5 w-16 overflow-hidden rounded-full bg-[#E9E2D8]">
+                <div className="h-1.5 w-16 overflow-hidden rounded-full bg-[rgba(93,74,50,0.14)]">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{
@@ -115,10 +119,14 @@ export default function AgentStatus({
   }
 
   return (
-    <div className="w-full bg-surface-2 rounded-2xl mb-4 border border-secondary/15 shadow-sm">
+    <div className="mb-4 w-full rounded-2xl border border-[rgba(93,74,50,0.16)] bg-[rgba(255,249,238,0.78)] shadow-sm backdrop-blur">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-accent mb-3 flex items-center gap-2">
-          <span>🤖</span>
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[rgba(93,74,50,0.24)]">
+            <svg className="h-3.5 w-3.5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M9 7h6m-9 4h12m-9 4h6M8 3h8l1 3H7l1-3zM6 6h12a2 2 0 012 2v9a3 3 0 01-3 3H7a3 3 0 01-3-3V8a2 2 0 012-2z" />
+            </svg>
+          </span>
           <span>AI 智能体协作状态</span>
           {processingCount > 0 && (
             <span className="ml-2 px-2 py-0.5 rounded-full bg-accent/90 text-accent text-xs animate-pulse">

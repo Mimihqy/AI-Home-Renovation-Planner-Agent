@@ -25,7 +25,7 @@ export default function DropDown({ theme, setTheme, themes }: DropDownProps) {
   return (
     <Menu as="div" className="relative block text-left">
       <div>
-        <Menu.Button className="inline-flex w-full justify-between items-center rounded-xl border border-secondary/30 bg-white px-4 py-2.5 text-accent shadow-sm hover:bg-surface-2 hover:border-secondary/50 focus:outline-none focus:ring-2 focus:ring-accent/20 transition-all duration-300 font-body">
+        <Menu.Button className="inline-flex w-full justify-between items-center rounded-xl border border-[rgba(93,74,50,0.24)] bg-[rgba(255,252,246,0.9)] px-4 py-2.5 text-accent shadow-sm hover:bg-[rgba(255,252,246,1)] hover:border-[rgba(93,74,50,0.34)] focus:outline-none focus:ring-2 focus:ring-[rgba(175,135,80,0.28)] transition-all duration-300 font-body">
           {getLabel(theme)}
           <ChevronUpIcon
             className="-mr-1 ml-2 h-5 w-5 ui-open:hidden text-accent"
@@ -48,7 +48,7 @@ export default function DropDown({ theme, setTheme, themes }: DropDownProps) {
         leaveTo="transform opacity-0 scale-95"
       >
         <Menu.Items
-          className="absolute left-0 z-10 mt-2 w-full origin-top-right rounded-xl bg-white shadow-lg ring-1 ring-secondary/20 focus:outline-none overflow-hidden"
+          className="absolute left-0 z-10 mt-2 w-full origin-top-right rounded-xl bg-[rgba(255,251,244,0.98)] shadow-lg ring-1 ring-[rgba(93,74,50,0.2)] focus:outline-none overflow-hidden backdrop-blur"
           key={theme}
         >
           <div className="">
@@ -58,8 +58,8 @@ export default function DropDown({ theme, setTheme, themes }: DropDownProps) {
                   <button
                     onClick={() => setTheme(themeItem)}
                     className={classNames(
-                      active ? "bg-surface-2 text-accent" : "text-text-secondary",
-                      themeItem === theme ? "bg-accent/10 font-medium" : "",
+                      active ? "bg-[rgba(93,74,50,0.08)] text-accent" : "text-text-secondary",
+                      themeItem === theme ? "bg-[rgba(175,135,80,0.14)] font-medium" : "",
                       "px-4 py-2.5 text-sm w-full text-left flex items-center space-x-2 justify-between transition-colors duration-200"
                     )}
                   >

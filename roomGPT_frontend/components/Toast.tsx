@@ -83,11 +83,11 @@ function Toast({ toast, onClose }: { toast: ToastMessage; onClose: () => void })
   const getStyles = () => {
     switch (toast.type) {
       case "success":
-        return "bg-gradient-to-r from-[#7A9E7E] to-[#5B8A72] text-white";
+        return "bg-gradient-to-r from-[#536f56] to-[#6d8f70] text-white";
       case "error":
         return "bg-gradient-to-r from-red-500 to-orange-500 text-white";
       default:
-        return "bg-gradient-to-r from-[#8B6F47] to-[#A68B5B] text-white";
+        return "bg-gradient-to-r from-[#2d241d] to-[#7a5c39] text-white";
     }
   };
 
@@ -96,7 +96,7 @@ function Toast({ toast, onClose }: { toast: ToastMessage; onClose: () => void })
       initial={{ opacity: 0, y: 20, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -20, scale: 0.95 }}
-      className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg ${getStyles()}`}
+      className={`flex items-center gap-3 rounded-xl border border-white/20 px-4 py-3 shadow-soft-xl backdrop-blur ${getStyles()}`}
     >
       {getIcon()}
       <span className="text-sm font-medium">{toast.message}</span>

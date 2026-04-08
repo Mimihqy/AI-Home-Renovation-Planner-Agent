@@ -7,29 +7,31 @@ interface QuickScenesProps {
 }
 
 const scenes = [
-  { icon: "🛋️", name: "客厅", id: "living_room" },
-  { icon: "🛏️", name: "卧室", id: "bedroom" },
-  { icon: "🍳", name: "厨房", id: "kitchen" },
-  { icon: "🚿", name: "卫生间", id: "bathroom" },
-  { icon: "📚", name: "书房", id: "study" },
-  { icon: "🌿", name: "阳台", id: "balcony" },
-  { icon: "🍽", name: "餐厅", id: "dining_room" },
-  { icon: "🎥", name: "娱乐室", id: "entertainment" },
+  { name: "客厅", id: "living_room" },
+  { name: "卧室", id: "bedroom" },
+  { name: "厨房", id: "kitchen" },
+  { name: "卫生间", id: "bathroom" },
+  { name: "书房", id: "study" },
+  { name: "阳台", id: "balcony" },
+  { name: "餐厅", id: "dining_room" },
+  { name: "娱乐室", id: "entertainment" },
 ];
 
 const styles = [
-  { icon: "🏢", name: "现代简约", id: "modern" },
-  { icon: "🏔", name: "北欧风", id: "nordic" },
-  { icon: "🏮", name: "新中式", id: "chinese" },
-  { icon: "🏛️", name: "美式", id: "american" },
-  { icon: "🎨", name: "ins风", id: "industrial" },
+  { name: "现代简约", id: "modern" },
+  { name: "北欧风", id: "nordic" },
+  { name: "新中式", id: "chinese" },
+  { name: "美式", id: "american" },
+  { name: "ins风", id: "industrial" },
 ];
+
+const Dot = () => <span className="inline-block h-1.5 w-1.5 rounded-full bg-[rgba(140,106,65,0.8)]" />;
 
 export default function QuickScenes({ onSelect }: QuickScenesProps) {
   return (
     <div className="mb-3 space-y-3">
       <div>
-        <p className="text-xs text-text-tertiary mb-2 font-medium">房间类型</p>
+        <p className="mb-2 text-xs font-medium text-text-tertiary">房间类型</p>
         <div className="flex flex-wrap gap-2">
           {scenes.map((scene, index) => (
             <motion.button
@@ -38,9 +40,9 @@ export default function QuickScenes({ onSelect }: QuickScenesProps) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
               onClick={() => onSelect?.(scene.name)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/70 hover:bg-white border border-secondary/20 transition text-xs text-text-secondary hover:text-accent font-body"
+              className="flex items-center gap-1.5 rounded-lg border border-[rgba(93,74,50,0.2)] bg-[rgba(255,251,244,0.8)] px-3 py-1.5 text-xs font-body text-text-secondary transition hover:-translate-y-0.5 hover:bg-[rgba(255,251,244,0.95)] hover:text-accent"
             >
-              <span className="text-base">{scene.icon}</span>
+              <Dot />
               <span>{scene.name}</span>
             </motion.button>
           ))}
@@ -48,7 +50,7 @@ export default function QuickScenes({ onSelect }: QuickScenesProps) {
       </div>
 
       <div>
-        <p className="text-xs text-text-tertiary mb-2 font-medium">装修风格</p>
+        <p className="mb-2 text-xs font-medium text-text-tertiary">装修风格</p>
         <div className="flex flex-wrap gap-2">
           {styles.map((style, index) => (
             <motion.button
@@ -57,9 +59,9 @@ export default function QuickScenes({ onSelect }: QuickScenesProps) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 + index * 0.05 }}
               onClick={() => onSelect?.("", style.name)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/70 hover:bg-white border border-secondary/20 transition text-xs text-text-secondary hover:text-accent font-body"
+              className="flex items-center gap-1.5 rounded-lg border border-[rgba(93,74,50,0.2)] bg-[rgba(255,251,244,0.8)] px-3 py-1.5 text-xs font-body text-text-secondary transition hover:-translate-y-0.5 hover:bg-[rgba(255,251,244,0.95)] hover:text-accent"
             >
-              <span className="text-base">{style.icon}</span>
+              <Dot />
               <span>{style.name}</span>
             </motion.button>
           ))}
